@@ -1,4 +1,4 @@
-"""Abstract warehouse output port defining Clean Architecture boundaries."""
+"""Abstract output ports defining Clean Architecture boundaries for DataPulse."""
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
@@ -6,7 +6,21 @@ from datetime import datetime
 from types import TracebackType
 from typing import Any
 
+from pydantic import BaseModel, ConfigDict, Field
+
+from datapulse.domain.manifest import DestinationConfig
 from datapulse.domain.models import DLQRecord
+
+
+class BatchUpsertResult(BaseModel):
+    """Result contract returned by a DestinationConnectorPort batch dispatch."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    accepted_ids: list[str] = Field(default_factory=list)
+    failed_records: list[dict[str, Any]] = Field(default_factory=list)
+    http_requests_made: int = Field(default=0, ge=0)
+    retries_triggered: int = Field(default=0, ge=0)
 
 
 class WarehouseAdapterPort(ABC):
@@ -80,3 +94,23 @@ class WarehouseAdapterPort(ABC):
     def mark_dlq_resolved(self, sync_id: str, record_ids: list[str]) -> None:
         """Transition specified DLQ records from 'PENDING' to 'RESOLVED'."""
 
+
+class DestinationConnectorPort(ABC):
+    """Port interface for dispatching validated batches to downstream SaaS APIs."""
+
+    @abstractmethod
+    def send_batch(
+        self,
+        sync_id: str,
+        records: list[dict[str, Any]],
+        destination_config: DestinationConfig,
+    ) -> BatchUpsertResult:
+        """Send a bounded sub-batch of records to the destination connector."""
+
+
+class AlertDispatcherPort(ABC):
+    """Port interface for multi-channel operational and FinOps alerting."""
+
+    @abstractmethod
+    def dispatch_sync_report(self, report_text: str, payload: dict[str, Any]) -> bool:
+        """Dispatch structured sync reconciliation and DLQ summary to alert channel."""

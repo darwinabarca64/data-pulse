@@ -13,15 +13,23 @@ from datapulse.domain.models import (
     DLQRecord,
     DLQStage,
 )
-from datapulse.domain.ports import WarehouseAdapterPort
+from datapulse.domain.ports import (
+    AlertDispatcherPort,
+    BatchUpsertResult,
+    DestinationConnectorPort,
+    WarehouseAdapterPort,
+)
 
 __all__ = [
     "AIEnrichmentConfig",
+    "AlertDispatcherPort",
+    "BatchUpsertResult",
     "CustomerProfitabilityRecord",
     "CustomerTier",
     "DLQRecord",
     "DLQStage",
     "DestinationConfig",
+    "DestinationConnectorPort",
     "RateLimitConfig",
     "SourceConfig",
     "SyncManifest",
