@@ -114,7 +114,7 @@ flowchart TD
 
 Every execution of `ExecuteSyncUseCase` enforces a strict conservation equation across Extracted rows ($N$), Upserted CRM rows ($S$), Skipped Unchanged rows ($O$), and Quarantined DLQ rows ($E$):
 
-$$N_{\text{extracted}} = S_{\text{upserted}} + O_{\text{skipped\_unchanged}} + E_{\text{dlq\_quarantined}}$$
+$$N_{\text{extracted}} = S_{\text{upserted}} + O_{\text{skipped unchanged}} + E_{\text{dlq quarantined}}$$
 
 ```mermaid
 stateDiagram-v2
