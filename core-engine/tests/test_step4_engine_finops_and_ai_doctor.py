@@ -25,7 +25,7 @@ EMOJI_PATTERN = re.compile(
     flags=re.UNICODE,
 )
 
-EXCLUDED_DIRS = {".git", ".pytest_cache", "__pycache__", ".venv", "venv", "node_modules"}
+EXCLUDED_DIRS = {".git", ".pytest_cache", "__pycache__", ".venv", "venv", "node_modules", "dist", "data_pulse.egg-info"}
 
 
 def test_full_10k_sync_and_second_run_sha256_hash_diffing(tmp_path: Path) -> None:

@@ -3,14 +3,14 @@
     "os": "Windows 10 (10.0.19045)",
     "logical_cpus": 8,
     "total_ram_gb": 15.78,
-    "available_ram_gb": 5.88,
-    "memory_load_percent": 62
+    "available_ram_gb": 3.98,
+    "memory_load_percent": 74
   },
   "volumes": {
     "C:": {
       "total_gb": 237.85,
-      "used_gb": 203.45,
-      "free_gb": 34.4
+      "used_gb": 203.91,
+      "free_gb": 33.94
     },
     "D:": {
       "total_gb": 468.75,
@@ -39,7 +39,7 @@
     "recommended_swap_gb": 2,
     "recommended_wslconfig_path": "D:\\programs\\Data Engineering\\DataPulse\\infra\\wsl\\.wslconfig.recommended",
     "c_drive_status": "[OK]",
-    "disk_verdict": "C: has 34.4 GB free (>= 25.0 GB threshold). Sufficient for local execution.",
+    "disk_verdict": "C: has 33.94 GB free (>= 25.0 GB threshold). Sufficient for local execution.",
     "alternate_drives_available": [
       "D:",
       "E:"

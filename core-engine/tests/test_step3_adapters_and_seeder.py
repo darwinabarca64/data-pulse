@@ -34,7 +34,7 @@ EMOJI_PATTERN = re.compile(
     flags=re.UNICODE,
 )
 
-EXCLUDED_DIRS = {".git", ".pytest_cache", "__pycache__", ".venv", "venv", "node_modules"}
+EXCLUDED_DIRS = {".git", ".pytest_cache", "__pycache__", ".venv", "venv", "node_modules", "dist", "data_pulse.egg-info"}
 
 
 def test_deterministic_10k_seeder_and_streaming_contract_validation(tmp_path: Path) -> None:

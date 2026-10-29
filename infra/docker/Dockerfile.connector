@@ -1,0 +1,20 @@
+# ============================================================================
+# DataPulse TypeScript Connector & Live Monitor (infra/docker/Dockerfile.connector)
+# ============================================================================
+FROM node:22-alpine
+
+ENV NODE_ENV=production \
+    PORT=3000
+
+WORKDIR /app
+
+COPY connectors-ts/package.json ./
+COPY connectors-ts/tsconfig.json ./
+RUN npm install --no-package-lock
+
+COPY connectors-ts/src/ ./src/
+
+EXPOSE 3000
+
+CMD ["npm", "start"]
+

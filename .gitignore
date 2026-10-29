@@ -17,6 +17,8 @@ __pycache__/
 # Storage & DuckDB Artifacts
 *.duckdb
 *.duckdb.wal
+data/*.duckdb
+data/*.duckdb.wal
 *.db
 *.sqlite3
 
@@ -31,8 +33,10 @@ infra/keys/
 
 # Build & Distribution Artifacts
 dist/
+connectors-ts/dist/
 build/
 *.egg-info/
 node_modules/
+package-lock.json
 coverage/
 

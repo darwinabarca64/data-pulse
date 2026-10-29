@@ -18,7 +18,7 @@ EMOJI_PATTERN = re.compile(
     flags=re.UNICODE,
 )
 
-EXCLUDED_DIRS = {".git", ".pytest_cache", "__pycache__", ".venv", "venv", "node_modules"}
+EXCLUDED_DIRS = {".git", ".pytest_cache", "__pycache__", ".venv", "venv", "node_modules", "dist", "data_pulse.egg-info"}
 
 
 def _all_repo_text_files() -> List[Path]:

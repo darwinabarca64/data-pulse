@@ -18,7 +18,7 @@ EMOJI_PATTERN = re.compile(
     flags=re.UNICODE,
 )
 
-EXCLUDED_DIRS = {".git", ".pytest_cache", "__pycache__", ".venv", "venv", "node_modules", "dist"}
+EXCLUDED_DIRS = {".git", ".pytest_cache", "__pycache__", ".venv", "venv", "node_modules", "dist", "data_pulse.egg-info"}
 
 
 def test_step5_typescript_modules_exist_and_comply_with_governance() -> None:
