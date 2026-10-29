@@ -22,7 +22,13 @@ def _is_nan_or_inf(val: Any) -> bool:
     """Return True if val represents IEEE-754 NaN or Infinity (float or string)."""
     if isinstance(val, (int, float)) and not isinstance(val, bool):
         return math.isnan(float(val)) or math.isinf(float(val))
-    if isinstance(val, str) and val.strip().lower() in ("nan", "inf", "-inf", "infinity", "-infinity"):
+    if isinstance(val, str) and val.strip().lower() in (
+        "nan",
+        "inf",
+        "-inf",
+        "infinity",
+        "-infinity",
+    ):
         return True
     return False
 
@@ -70,7 +76,12 @@ def remediate_corrupt_payload(
     repaired = dict(raw_payload)
 
     if "email" in repaired and isinstance(repaired["email"], str):
-        if error_code == "INVALID_EMAIL_FORMAT" or "@@" in repaired["email"] or "@" not in repaired["email"] or ".." in repaired["email"]:
+        if (
+            error_code == "INVALID_EMAIL_FORMAT"
+            or "@@" in repaired["email"]
+            or "@" not in repaired["email"]
+            or ".." in repaired["email"]
+        ):
             repaired["email"] = _sanitize_email(repaired["email"])
 
     rev = _sanitize_float(repaired.get("annual_revenue", 0.0))
@@ -133,6 +144,7 @@ class ManageDLQUseCase:
 
         repaired_payloads: list[dict[str, Any]] = []
         candidate_hashes: dict[str, str] = {}
+        validated_by_id: dict[str, CustomerProfitabilityRecord] = {}
 
         for dlq_item in pending:
             candidate = (
@@ -153,6 +165,7 @@ class ManageDLQUseCase:
                 if brief is not None:
                     valid_rec.ai_executive_brief = brief
 
+            validated_by_id[valid_rec.customer_id] = valid_rec
             candidate_hashes[valid_rec.customer_id] = valid_rec.compute_payload_hash()
             repaired_payloads.append(
                 _map_record_fields(valid_rec, manifest.destination.field_mapping)
@@ -170,6 +183,11 @@ class ManageDLQUseCase:
             }
             self._warehouse.upsert_payload_hashes(sync_id, accepted_hashes)
             self._warehouse.mark_dlq_resolved(sync_id, accepted_ids)
+            if apply_remediation:
+                remediated_records = [
+                    validated_by_id[cid] for cid in accepted_ids if cid in validated_by_id
+                ]
+                self._warehouse.apply_remediated_source_records(remediated_records)
 
         remaining = len(self._warehouse.fetch_pending_dlq_records(sync_id))
         return {
@@ -178,4 +196,3 @@ class ManageDLQUseCase:
             "remediated_and_synced": len(accepted_ids),
             "remaining_pending": remaining,
         }
-

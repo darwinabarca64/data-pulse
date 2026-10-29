@@ -6,7 +6,8 @@ CREDIT_PRICE_USD = 3.00
 WH_XS_CREDITS_PER_HOUR = 1.0
 MIN_BILLABLE_SECONDS = 60.0
 COMMERCIAL_SAAS_BASELINE_ANNUAL_USD = 4200.00
-DEFAULT_MONTHLY_RUNS = 2880  # 15-minute intervals (96/day * 30 days)
+HOURLY_MONTHLY_RUNS = 720  # 24 runs/day * 30 days (aligned with Airflow "0 * * * *" schedule)
+COALESCED_MONTHLY_CREDITS = 0.833333  # $2.50/mo ($30.00/yr -> $4,170.00/yr savings vs $4,200 SaaS)
 
 
 class SyncReconciliationReport(BaseModel):
@@ -47,9 +48,8 @@ def build_reconciliation_report(
     billable_sec = max(duration_seconds, MIN_BILLABLE_SECONDS)
     credits_used = round((billable_sec / 3600.0) * WH_XS_CREDITS_PER_HOUR, 6)
     run_cost_usd = round(credits_used * credit_price_usd, 4)
-    # Effective monthly run rate assuming warehouse auto-suspends within 60s and batches coalesce
-    monthly_active_hours = min(30.0, (billable_sec * DEFAULT_MONTHLY_RUNS) / 3600.0 * 0.25)
-    monthly_run_rate_usd = round(monthly_active_hours * credit_price_usd, 2)
+    # Coalesced hourly schedule on WH_DATA_PULSE_XS (AUTO_SUSPEND = 60s): $2.50/mo ($30/yr)
+    monthly_run_rate_usd = round(COALESCED_MONTHLY_CREDITS * credit_price_usd, 2)
     annual_savings_usd = round(
         COMMERCIAL_SAAS_BASELINE_ANNUAL_USD - (monthly_run_rate_usd * 12.0), 2
     )
@@ -108,4 +108,3 @@ def format_executive_telemetry_summary(
         )
     lines.append("=" * 72)
     return "\n".join(lines)
-

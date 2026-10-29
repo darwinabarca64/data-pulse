@@ -68,6 +68,7 @@ except ImportError:
 
 MANIFEST_PATH = "syncs/hubspot_profitability.yml"
 SYNC_ID = "hubspot_customer_profitability"
+CLI_INVOCATION = "python -m datapulse.interfaces.cli"
 
 DEFAULT_ARGS: dict[str, Any] = {
     "owner": "datapulse-platform-engineering",
@@ -88,17 +89,17 @@ with DAG(
 ) as dag:
     validate_sync_manifest = BashOperator(
         task_id="validate_sync_manifest",
-        bash_command=f"datapulse validate --manifest {MANIFEST_PATH}",
+        bash_command=f"{CLI_INVOCATION} validate --manifest {MANIFEST_PATH}",
     )
 
     execute_incremental_reverse_etl = BashOperator(
         task_id="execute_incremental_reverse_etl",
-        bash_command=f"datapulse run --manifest {MANIFEST_PATH}",
+        bash_command=f"{CLI_INVOCATION} run --manifest {MANIFEST_PATH}",
     )
 
     audit_dlq_and_finops_telemetry = BashOperator(
         task_id="audit_dlq_and_finops_telemetry",
-        bash_command=f"datapulse dlq inspect --sync-id {SYNC_ID}",
+        bash_command=f"{CLI_INVOCATION} dlq inspect --sync-id {SYNC_ID}",
     )
 
     (
@@ -106,4 +107,3 @@ with DAG(
         >> execute_incremental_reverse_etl
         >> audit_dlq_and_finops_telemetry
     )
-

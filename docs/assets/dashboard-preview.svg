@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="100%" height="100%">
+  <defs>
+    <linearGradient id="dashBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#090d16" />
+      <stop offset="100%" stop-color="#111827" />
+    </linearGradient>
+  </defs>
+
+  <!-- Browser Frame -->
+  <rect x="0" y="0" width="960" height="540" rx="10" fill="url(#dashBg)" stroke="#334155" stroke-width="2" />
+  <rect x="2" y="2" width="956" height="42" rx="8" fill="#1e293b" />
+  <circle cx="22" cy="23" r="6" fill="#ef4444" />
+  <circle cx="42" cy="23" r="6" fill="#f59e0b" />
+  <circle cx="62" cy="23" r="6" fill="#10b981" />
+
+  <!-- Address Bar -->
+  <rect x="90" y="10" width="660" height="26" rx="5" fill="#0f172a" stroke="#334155" stroke-width="1" />
+  <text x="106" y="27" fill="#38bdf8" font-family="Consolas, monospace" font-size="12">
+    http://localhost:3000 — DataPulse Live Executive CRM &amp; FinOps Monitor (SSR)
+  </text>
+  <rect x="770" y="10" width="166" height="26" rx="5" fill="#065f46" />
+  <text x="853" y="27" text-anchor="middle" fill="#ecfdf5" font-family="Segoe UI, sans-serif" font-size="11" font-weight="bold">
+    STATUS: 200 OK (HMAC + ZOD)
+  </text>
+
+  <!-- Dashboard Header -->
+  <text x="28" y="76" fill="#f8fafc" font-family="Segoe UI, sans-serif" font-size="20" font-weight="bold">
+    DataPulse Reverse-ETL — HubSpot CRM v3 Live Executive Monitor
+  </text>
+  <text x="28" y="96" fill="#94a3b8" font-family="Segoe UI, sans-serif" font-size="12">
+    Zero-Trust Snowflake / DuckDB Sync Engine | SHA-256 State Diffing | Surgical DLQ Auto-Remediation
+  </text>
+
+  <!-- 4 KPI Cards -->
+  <g font-family="Segoe UI, sans-serif">
+    <!-- Card 1 -->
+    <rect x="28" y="114" width="215" height="86" rx="8" fill="#0f172a" stroke="#1e293b" stroke-width="1.5" />
+    <text x="44" y="138" fill="#94a3b8" font-size="11" font-weight="bold">TOTAL SYNCED CONTACTS</text>
+    <text x="44" y="172" fill="#10b981" font-size="28" font-weight="bold">10,000</text>
+    <text x="44" y="190" fill="#64748b" font-size="11">100 HTTP Batches (100% Converged)</text>
+
+    <!-- Card 2 -->
+    <rect x="257" y="114" width="215" height="86" rx="8" fill="#0f172a" stroke="#1e293b" stroke-width="1.5" />
+    <text x="273" y="138" fill="#94a3b8" font-size="11" font-weight="bold">VIP EXECUTIVE BRIEFS</text>
+    <text x="273" y="172" fill="#f43f5e" font-size="28" font-weight="bold">60</text>
+    <text x="273" y="190" fill="#64748b" font-size="11">Margin Drop &lt; -12.0% Alerted</text>
+
+    <!-- Card 3 -->
+    <rect x="486" y="114" width="215" height="86" rx="8" fill="#0f172a" stroke="#1e293b" stroke-width="1.5" />
+    <text x="502" y="138" fill="#94a3b8" font-size="11" font-weight="bold">PENDING DLQ QUARANTINE</text>
+    <text x="502" y="172" fill="#38bdf8" font-size="28" font-weight="bold">0</text>
+    <text x="502" y="190" fill="#64748b" font-size="11">200 Poison Rows Healed &amp; Replayed</text>
+
+    <!-- Card 4 -->
+    <rect x="715" y="114" width="217" height="86" rx="8" fill="#0f172a" stroke="#1e293b" stroke-width="1.5" />
+    <text x="731" y="138" fill="#94a3b8" font-size="11" font-weight="bold">NET FINOPS SAAS SAVINGS</text>
+    <text x="731" y="172" fill="#fbbf24" font-size="28" font-weight="bold">$4,170/yr</text>
+    <text x="731" y="190" fill="#64748b" font-size="11">$2.50/mo X-Small vs $4,200/yr SaaS</text>
+  </g>
+
+  <!-- Table Container -->
+  <rect x="28" y="218" width="904" height="296" rx="8" fill="#0f172a" stroke="#1e293b" stroke-width="1.5" />
+  <rect x="29" y="219" width="902" height="36" rx="7" fill="#1e293b" />
+
+  <!-- Table Headers -->
+  <g font-family="Consolas, monospace" font-size="11" font-weight="bold" fill="#cbd5e1">
+    <text x="44" y="241">CUSTOMER ID</text>
+    <text x="148" y="241">EMAIL (ID PROPERTY)</text>
+    <text x="348" y="241">TIER</text>
+    <text x="470" y="241">NET PROFIT</text>
+    <text x="568" y="241">MARGIN</text>
+    <text x="646" y="241">AI EXECUTIVE BRIEF (15-22 WORDS)</text>
+  </g>
+
+  <!-- Table Rows -->
+  <g font-family="Consolas, monospace" font-size="11">
+    <!-- Row 1 -->
+    <line x1="28" y1="305" x2="932" y2="305" stroke="#1e293b" stroke-width="1" />
+    <text x="44" y="280" fill="#38bdf8" font-weight="bold">CUST-00001</text>
+    <text x="148" y="280" fill="#e2e8f0">contact_1@enterprise-00001.io</text>
+    <text x="348" y="280" fill="#f43f5e" font-weight="bold">ENTERPRISE_VIP</text>
+    <text x="470" y="280" fill="#f43f5e">-$25,000.00</text>
+    <text x="568" y="280" fill="#f43f5e" font-weight="bold">-20.8%</text>
+    <text x="646" y="274" fill="#94a3b8">Action required for Enterprise Corp 00001:</text>
+    <text x="646" y="290" fill="#94a3b8">VIP margin dropped to -20.8%; review pricing.</text>
+
+    <!-- Row 2 -->
+    <line x1="28" y1="358" x2="932" y2="358" stroke="#1e293b" stroke-width="1" />
+    <text x="44" y="334" fill="#38bdf8" font-weight="bold">CUST-00002</text>
+    <text x="148" y="334" fill="#e2e8f0">contact_2@enterprise-00002.io</text>
+    <text x="348" y="334" fill="#f43f5e" font-weight="bold">ENTERPRISE_VIP</text>
+    <text x="470" y="334" fill="#f43f5e">-$25,000.00</text>
+    <text x="568" y="334" fill="#f43f5e" font-weight="bold">-20.8%</text>
+    <text x="646" y="328" fill="#94a3b8">Action required for Enterprise Corp 00002:</text>
+    <text x="646" y="344" fill="#94a3b8">VIP margin dropped to -20.8%; review pricing.</text>
+
+    <!-- Row 3 (Healed Email Row) -->
+    <line x1="28" y1="411" x2="932" y2="411" stroke="#1e293b" stroke-width="1" />
+    <text x="44" y="387" fill="#10b981" font-weight="bold">CUST-09801</text>
+    <text x="148" y="387" fill="#e2e8f0">corrupt_email_9801@invalid.domain</text>
+    <text x="348" y="387" fill="#38bdf8">MID_MARKET</text>
+    <text x="470" y="387" fill="#10b981">+$54,005.00</text>
+    <text x="568" y="387" fill="#10b981" font-weight="bold">+50.0%</text>
+    <text x="646" y="387" fill="#10b981">[DLQ REPLAYED] RFC-5322 Email Normalized</text>
+
+    <!-- Row 4 (Healed NaN Row) -->
+    <line x1="28" y1="464" x2="932" y2="464" stroke="#1e293b" stroke-width="1" />
+    <text x="44" y="440" fill="#10b981" font-weight="bold">CUST-09951</text>
+    <text x="148" y="440" fill="#e2e8f0">contact_9951@enterprise-09951.io</text>
+    <text x="348" y="440" fill="#a855f7">SMB</text>
+    <text x="470" y="440" fill="#10b981">+$54,755.00</text>
+    <text x="568" y="440" fill="#10b981" font-weight="bold">+50.0%</text>
+    <text x="646" y="440" fill="#10b981">[DLQ REPLAYED] IEEE-754 NaN Margin Recomputed</text>
+
+    <!-- Footer Note -->
+    <text x="44" y="494" fill="#64748b">
+      Showing 4 of 50 SSR preview rows (10,000 total contacts stored in Map&lt;string, ContactRecord&gt; | 0 Pending DLQ)
+    </text>
+  </g>
+</svg>
+

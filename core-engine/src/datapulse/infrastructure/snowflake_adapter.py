@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from datapulse.domain.models import DLQRecord
+from datapulse.domain.models import CustomerProfitabilityRecord, DLQRecord
 from datapulse.domain.ports import WarehouseAdapterPort
 from datapulse.infrastructure.duckdb_adapter import CUSTOMER_COLUMNS
 
@@ -74,22 +74,24 @@ class SnowflakeWarehouseAdapter(WarehouseAdapterPort):
 
     def ensure_governance_tables(self) -> None:
         db = self._database
-        self._exec(f"CREATE SCHEMA IF NOT EXISTS {db}.AUDIT;")
         self._exec(
             f"CREATE TABLE IF NOT EXISTS {db}.AUDIT.DATA_PULSE_WATERMARKS ("
-            "SYNC_ID VARCHAR(128) PRIMARY KEY, WATERMARK_TS TIMESTAMP_TZ NOT NULL, "
-            "RECORDS_PROCESSED INTEGER NOT NULL, UPDATED_AT TIMESTAMP_TZ NOT NULL);"
+            "SYNC_ID VARCHAR(128) PRIMARY KEY, WATERMARK_TS TIMESTAMP_NTZ NOT NULL, "
+            "RECORDS_PROCESSED NUMBER NOT NULL, UPDATED_AT TIMESTAMP_NTZ NOT NULL);"
         )
         self._exec(
             f"CREATE TABLE IF NOT EXISTS {db}.AUDIT.DATA_PULSE_STATE_HASHES ("
             "SYNC_ID VARCHAR(128) NOT NULL, RECORD_ID VARCHAR(64) NOT NULL, "
-            "PAYLOAD_HASH VARCHAR(64) NOT NULL, UPDATED_AT TIMESTAMP_TZ NOT NULL, PRIMARY KEY (SYNC_ID, RECORD_ID));"
+            "PAYLOAD_HASH VARCHAR(64) NOT NULL, UPDATED_AT TIMESTAMP_NTZ NOT NULL, "
+            "PRIMARY KEY (SYNC_ID, RECORD_ID));"
         )
         self._exec(
             f"CREATE TABLE IF NOT EXISTS {db}.AUDIT.DATA_PULSE_DLQ ("
-            "SYNC_ID VARCHAR(128) NOT NULL, RECORD_ID VARCHAR(64) NOT NULL, FAILED_AT TIMESTAMP_TZ NOT NULL, "
-            "STAGE VARCHAR(64) NOT NULL, ERROR_CODE VARCHAR(64) NOT NULL, ERROR_MESSAGE VARCHAR(1024) NOT NULL, "
-            "RAW_PAYLOAD VARCHAR(16384) NOT NULL, STATUS VARCHAR(32) NOT NULL, PRIMARY KEY (SYNC_ID, RECORD_ID));"
+            "SYNC_ID VARCHAR(128) NOT NULL, RECORD_ID VARCHAR(64) NOT NULL, "
+            "FAILED_AT TIMESTAMP_NTZ NOT NULL, STAGE VARCHAR(64) NOT NULL, "
+            "ERROR_CODE VARCHAR(64) NOT NULL, ERROR_MESSAGE VARCHAR(1024) NOT NULL, "
+            "RAW_PAYLOAD VARIANT NOT NULL, STATUS VARCHAR(32) NOT NULL, "
+            "PRIMARY KEY (SYNC_ID, RECORD_ID));"
         )
 
     def get_high_watermark(self, sync_id: str) -> datetime | None:
@@ -151,8 +153,12 @@ class SnowflakeWarehouseAdapter(WarehouseAdapterPort):
         cur = self._require_conn().cursor()
         try:
             cur.executemany(
-                f"INSERT OVERWRITE INTO {self._database}.AUDIT.DATA_PULSE_STATE_HASHES "
-                "(SYNC_ID, RECORD_ID, PAYLOAD_HASH, UPDATED_AT) VALUES (%s, %s, %s, %s);",
+                f"MERGE INTO {self._database}.AUDIT.DATA_PULSE_STATE_HASHES t "
+                "USING (SELECT %s AS s, %s AS r, %s AS h, %s AS u) src "
+                "ON t.SYNC_ID = src.s AND t.RECORD_ID = src.r "
+                "WHEN MATCHED THEN UPDATE SET PAYLOAD_HASH = src.h, UPDATED_AT = src.u "
+                "WHEN NOT MATCHED THEN INSERT (SYNC_ID, RECORD_ID, PAYLOAD_HASH, UPDATED_AT) "
+                "VALUES (src.s, src.r, src.h, src.u);",
                 [(sync_id, rid, digest, now_utc) for rid, digest in hashes.items()],
             )
         finally:
@@ -166,7 +172,7 @@ class SnowflakeWarehouseAdapter(WarehouseAdapterPort):
             cur.executemany(
                 f"INSERT INTO {self._database}.AUDIT.DATA_PULSE_DLQ "
                 "(SYNC_ID, RECORD_ID, FAILED_AT, STAGE, ERROR_CODE, ERROR_MESSAGE, RAW_PAYLOAD, STATUS) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s);",
+                "VALUES (%s, %s, %s, %s, %s, %s, PARSE_JSON(%s), %s);",
                 [(r.sync_id, r.record_id, r.failed_at, r.stage, r.error_code,
                   r.error_message, json.dumps(r.raw_payload, default=str), r.status) for r in records],
             )
@@ -180,8 +186,12 @@ class SnowflakeWarehouseAdapter(WarehouseAdapterPort):
             (sync_id,),
         )
         return [
-            DLQRecord(sync_id=r[0], record_id=r[1], failed_at=r[2], stage=r[3],
-                      error_code=r[4], error_message=r[5], raw_payload=json.loads(r[6]), status=r[7])
+            DLQRecord(
+                sync_id=r[0], record_id=r[1], failed_at=r[2], stage=r[3],
+                error_code=r[4], error_message=r[5],
+                raw_payload=json.loads(r[6]) if isinstance(r[6], str) else dict(r[6]),
+                status=r[7],
+            )
             for r in rows
         ]
 
@@ -194,3 +204,9 @@ class SnowflakeWarehouseAdapter(WarehouseAdapterPort):
             f"WHERE SYNC_ID = %s AND RECORD_ID IN ({marks});",
             (sync_id, *record_ids),
         )
+
+    def apply_remediated_source_records(
+        self, records: list[CustomerProfitabilityRecord]
+    ) -> None:
+        """No-op in Snowflake to preserve strict Principle of Least Privilege (read-only MARTS)."""
+        return None

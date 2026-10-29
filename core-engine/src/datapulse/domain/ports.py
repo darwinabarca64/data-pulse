@@ -9,7 +9,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from datapulse.domain.manifest import DestinationConfig
-from datapulse.domain.models import DLQRecord
+from datapulse.domain.models import CustomerProfitabilityRecord, DLQRecord
 
 
 class BatchUpsertResult(BaseModel):
@@ -93,6 +93,12 @@ class WarehouseAdapterPort(ABC):
     @abstractmethod
     def mark_dlq_resolved(self, sync_id: str, record_ids: list[str]) -> None:
         """Transition specified DLQ records from 'PENDING' to 'RESOLVED'."""
+
+    @abstractmethod
+    def apply_remediated_source_records(
+        self, records: list[CustomerProfitabilityRecord]
+    ) -> None:
+        """Apply remediated records in local simulation (or no-op under PoLP in cloud)."""
 
 
 class DestinationConnectorPort(ABC):

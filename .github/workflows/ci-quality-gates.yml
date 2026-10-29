@@ -1,0 +1,58 @@
+name: DataPulse CI Quality Gates
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  quality-gates:
+    name: 4-Gate Architecture, TypeScript, DAG SLA & Live Incident Drill
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Python Core Engine & Dev Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Install TypeScript Connector Dependencies
+        working-directory: connectors-ts
+        run: npm install --no-package-lock
+
+      - name: "Gate 1: Architecture Governance, Hardware Audit & Clean Code Check"
+        run: |
+          python -m pytest tests/test_preflight_audit.py tests/test_step1_foundation.py core-engine/tests/test_step5_ts_governance.py tests/test_step8_cicd_and_docs_completeness.py tests/test_step9_readme_showcase.py -v
+
+      - name: "Gate 2: TypeScript Strict Compiler & Vitest Suite"
+        run: |
+          npm --prefix connectors-ts run typecheck
+          npm --prefix connectors-ts test
+
+      - name: "Gate 3: Airflow Thin DAG Parse SLA & Core Engine Unit Tests"
+        run: |
+          python -m pytest core-engine/tests orchestration/tests -v
+
+      - name: "Gate 4: End-to-End Cross-Language Live Incident Drill (10k Rows)"
+        run: |
+          python -m pytest tests/test_step7_live_incident_drill.py -v
+          python scripts/live_incident_drill.py

@@ -8,7 +8,7 @@ from typing import Any
 
 import duckdb
 
-from datapulse.domain.models import DLQRecord
+from datapulse.domain.models import CustomerProfitabilityRecord, DLQRecord
 from datapulse.domain.ports import WarehouseAdapterPort
 from datapulse.infrastructure.seeder import ensure_source_table, seed_duckdb_warehouse
 
@@ -27,9 +27,7 @@ def normalize_duckdb_table_name(target_table: str) -> str:
 
 def _to_naive_utc(dt: datetime) -> datetime:
     """Convert a datetime to naive UTC for DuckDB TIMESTAMP storage without pytz."""
-    if dt.tzinfo is not None:
-        return dt.astimezone(timezone.utc).replace(tzinfo=None)
-    return dt
+    return dt.astimezone(timezone.utc).replace(tzinfo=None) if dt.tzinfo is not None else dt
 
 
 def _to_aware_utc(dt: datetime) -> datetime:
@@ -108,8 +106,7 @@ class DuckDBWarehouseAdapter(WarehouseAdapterPort):
     def get_high_watermark(self, sync_id: str) -> datetime | None:
         """Read last committed watermark_ts for sync_id as UTC datetime."""
         row = self._require_conn().execute(
-            "SELECT watermark_ts FROM audit.data_pulse_watermarks WHERE sync_id = ?;",
-            [sync_id],
+            "SELECT watermark_ts FROM audit.data_pulse_watermarks WHERE sync_id = ?;", [sync_id]
         ).fetchone()
         return _to_aware_utc(row[0]) if row else None
 
@@ -142,8 +139,9 @@ class DuckDBWarehouseAdapter(WarehouseAdapterPort):
             )
             cursor.execute(sql, [_to_naive_utc(effective_watermark)])
         else:
-            sql = f"SELECT {cols_sql} FROM {table_ref} ORDER BY {watermark_column} ASC, customer_id ASC;"
-            cursor.execute(sql)
+            cursor.execute(
+                f"SELECT {cols_sql} FROM {table_ref} ORDER BY {watermark_column} ASC, customer_id ASC;"
+            )
 
         while True:
             chunk = cursor.fetchmany(batch_size)
@@ -170,31 +168,36 @@ class DuckDBWarehouseAdapter(WarehouseAdapterPort):
         return {str(r[0]): str(r[1]) for r in rows}
 
     def upsert_payload_hashes(self, sync_id: str, hashes: dict[str, str]) -> None:
-        """Bulk upsert SHA-256 payload hashes for sync_id."""
+        """Bulk upsert SHA-256 payload hashes via parameterized multi-row VALUES."""
         if not hashes:
             return
-        now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-        vals = ", ".join(f"('{sync_id}', '{rid}', '{h}', '{now_str}')" for rid, h in hashes.items())
+        now_utc = _to_naive_utc(datetime.now(timezone.utc))
+        placeholders = ", ".join(["(?, ?, ?, ?)"] * len(hashes))
+        flat_params: list[Any] = []
+        for rid, digest in hashes.items():
+            flat_params.extend([sync_id, rid, digest, now_utc])
         self._require_conn().execute(
-            f"INSERT OR REPLACE INTO audit.data_pulse_state_hashes VALUES {vals};"
+            f"INSERT OR REPLACE INTO audit.data_pulse_state_hashes "
+            f"(sync_id, record_id, payload_hash, updated_at) VALUES {placeholders};",
+            flat_params,
         )
 
     def insert_dlq_records(self, records: list[DLQRecord]) -> None:
-        """Persist quarantined DLQRecord objects into audit.data_pulse_dlq."""
+        """Persist quarantined DLQRecord objects via parameterized multi-row VALUES."""
         if not records:
             return
-        params = [
-            (
-                r.sync_id, r.record_id, _to_naive_utc(r.failed_at), r.stage, r.error_code,
-                r.error_message, json.dumps(r.raw_payload, default=str), r.status,
-            )
-            for r in records
-        ]
-        self._require_conn().executemany(
-            "INSERT OR REPLACE INTO audit.data_pulse_dlq "
-            "(sync_id, record_id, failed_at, stage, error_code, error_message, raw_payload, status) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?);",
-            params,
+        placeholders = ", ".join(["(?, ?, ?, ?, ?, ?, ?, ?)"] * len(records))
+        flat_params: list[Any] = []
+        for r in records:
+            flat_params.extend([
+                r.sync_id, r.record_id, _to_naive_utc(r.failed_at), r.stage,
+                r.error_code, r.error_message, json.dumps(r.raw_payload, default=str), r.status,
+            ])
+        self._require_conn().execute(
+            f"INSERT OR REPLACE INTO audit.data_pulse_dlq "
+            f"(sync_id, record_id, failed_at, stage, error_code, error_message, raw_payload, status) "
+            f"VALUES {placeholders};",
+            flat_params,
         )
 
     def fetch_pending_dlq_records(self, sync_id: str) -> list[DLQRecord]:
@@ -223,3 +226,23 @@ class DuckDBWarehouseAdapter(WarehouseAdapterPort):
             f"WHERE sync_id = ? AND record_id IN ({marks});",
             [sync_id, *record_ids],
         )
+
+    def apply_remediated_source_records(
+        self, records: list[CustomerProfitabilityRecord]
+    ) -> None:
+        """Update local DuckDB simulation source rows inside a single transaction."""
+        if not records:
+            return
+        params = [(rec.email, float(rec.profit_margin_pct), rec.customer_id) for rec in records]
+        conn = self._require_conn()
+        conn.execute("BEGIN TRANSACTION;")
+        try:
+            conn.executemany(
+                "UPDATE marts.fct_customer_profitability "
+                "SET email = ?, profit_margin_pct = ? WHERE customer_id = ?;",
+                params,
+            )
+            conn.execute("COMMIT;")
+        except Exception:
+            conn.execute("ROLLBACK;")
+            raise

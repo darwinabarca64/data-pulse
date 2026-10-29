@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 520" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b0f19" />
+      <stop offset="100%" stop-color="#111827" />
+    </linearGradient>
+    <linearGradient id="headerGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1e293b" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+  </defs>
+
+  <!-- Outer Window Frame -->
+  <rect x="0" y="0" width="960" height="520" rx="10" fill="url(#bgGrad)" stroke="#334155" stroke-width="2" />
+  <rect x="2" y="2" width="956" height="38" rx="8" fill="url(#headerGrad)" />
+  <line x1="0" y1="40" x2="960" y2="40" stroke="#334155" stroke-width="1" />
+
+  <!-- Window Controls -->
+  <circle cx="22" cy="21" r="6" fill="#ef4444" />
+  <circle cx="42" cy="21" r="6" fill="#f59e0b" />
+  <circle cx="62" cy="21" r="6" fill="#10b981" />
+  <text x="480" y="25" text-anchor="middle" fill="#94a3b8" font-family="Consolas, 'Courier New', monospace" font-size="13" font-weight="bold">
+    datapulse-cli — python scripts/live_incident_drill.py (Python 3.12 &lt;-&gt; TypeScript Node 20)
+  </text>
+
+  <!-- Terminal Body Text -->
+  <g font-family="Consolas, 'Courier New', monospace" font-size="13">
+    <text x="24" y="70" fill="#38bdf8" font-weight="bold">$ python scripts/live_incident_drill.py</text>
+    <text x="24" y="94" fill="#64748b">========================================================================================</text>
+    <text x="24" y="114" fill="#f8fafc" font-weight="bold">[DRILL] STARTING 4-PHASE LIVE CROSS-LANGUAGE PRODUCTION INCIDENT DRILL</text>
+    <text x="24" y="134" fill="#64748b">========================================================================================</text>
+
+    <text x="24" y="158" fill="#10b981">[OK] TypeScript CRM Connector online at http://127.0.0.1:54321/health (HMAC-SHA256 + Zod Active)</text>
+
+    <!-- Phase 1 -->
+    <rect x="20" y="172" width="920" height="68" rx="6" fill="#0f172a" stroke="#1e293b" stroke-width="1" />
+    <text x="34" y="194" fill="#fbbf24" font-weight="bold">[PHASE 1] Initial 10,000-Row Sync &amp; Contract Firewall Quarantine</text>
+    <text x="34" y="214" fill="#e2e8f0">  Metrics : N=10,000 | S=9,800 (Upserted) | O=0 (Skipped) | E=200 (DLQ Quarantined)</text>
+    <text x="34" y="232" fill="#10b981">  Law     : N == S + O + E (10000 == 9800 + 0 + 200) -&gt; Balanced: True | VIP Briefs: 60</text>
+
+    <!-- Phase 2 -->
+    <rect x="20" y="250" width="920" height="68" rx="6" fill="#0f172a" stroke="#1e293b" stroke-width="1" />
+    <text x="34" y="272" fill="#f43f5e" font-weight="bold">[PHASE 2] Out-of-Band PII-Redacted AIDLQDoctor Triage</text>
+    <text x="34" y="292" fill="#e2e8f0">  Groups  : 150 INVALID_EMAIL_FORMAT (@@ / ..) + 50 IEEE_754_NAN_INFINITY (Divide-by-Zero)</text>
+    <text x="34" y="310" fill="#94a3b8">  Privacy : email -&gt; "[REDACTED_PII_EMAIL]" | Remedial SQL: REGEXP_REPLACE &amp; COALESCE(NANVL)</text>
+
+    <!-- Phase 3 -->
+    <rect x="20" y="328" width="920" height="68" rx="6" fill="#0f172a" stroke="#1e293b" stroke-width="1" />
+    <text x="34" y="350" fill="#38bdf8" font-weight="bold">[PHASE 3] Surgical DLQ Auto-Remediation &amp; Replay (+2 HTTP Batches Only)</text>
+    <text x="34" y="370" fill="#e2e8f0">  Result  : Remediated=200 | Remaining_Pending_DLQ=0 | Total_CRM_Contacts=10,000/10,000</text>
+    <text x="34" y="388" fill="#10b981">  State   : 100% Data Convergence Achieved Without Re-Extracting 9,800 Clean Rows</text>
+
+    <!-- Phase 4 -->
+    <rect x="20" y="406" width="920" height="68" rx="6" fill="#0f172a" stroke="#1e293b" stroke-width="1" />
+    <text x="34" y="428" fill="#a855f7" font-weight="bold">[PHASE 4] Idempotent Second Sync Run (6-Field Canonical SHA-256 Hash Diffing)</text>
+    <text x="34" y="448" fill="#e2e8f0">  Result  : N=10,000 | S=0 (Upserted) | O=10,000 (Skipped Unchanged) | E=0 | HTTP_Calls=0</text>
+    <text x="34" y="466" fill="#10b981">  FinOps  : $2.50/mo Coalesced X-Small Compute | $4,170.00/yr Net SaaS Replacement Savings</text>
+
+    <text x="24" y="498" fill="#10b981" font-weight="bold">[OK] ALL 4 PHASES OF LIVE INCIDENT DRILL PASSED SUCCESSFULLY (Elapsed: 1.42s)</text>
+  </g>
+</svg>
+

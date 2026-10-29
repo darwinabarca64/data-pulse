@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "data-pulse"
 version = "0.1.0"
 description = "Enterprise-grade open-source Reverse ETL engine with FinOps & Zero-Trust RBAC governance"
-readme = "docs/runbooks/00-host-hardware-and-wsl2-setup.md"
+readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
 authors = [
@@ -23,6 +23,10 @@ dev = [
     "pytest>=8.0.0",
     "ruff>=0.4.0",
     "mypy>=1.10.0",
+]
+snowflake = [
+    "snowflake-connector-python>=3.10.0",
+    "cryptography>=42.0.0",
 ]
 
 [project.scripts]
@@ -48,4 +52,3 @@ select = ["E", "F", "I", "B", "UP"]
 python_version = "3.10"
 strict = true
 mypy_path = ["core-engine/src"]
-

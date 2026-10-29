@@ -1,8 +1,14 @@
-# Local Agent & IDE Rules
+# Local Agent, IDE & Audit Artifacts
 .antigravity/
 .gemini/
 .vscode/
 .idea/
+AUDIT-REPORT.md
+MANUAL-MAESTRO-DARWIN-ES.md
+
+# Machine-Generated Hardware & WSL2 Telemetry Artifacts
+docs/runbooks/hardware_audit_report.json
+infra/wsl/.wslconfig.recommended
 
 # Python Virtual Environments & Cache
 .venv/
@@ -17,8 +23,10 @@ __pycache__/
 # Storage & DuckDB Artifacts
 *.duckdb
 *.duckdb.wal
+*.duckdb*
 data/*.duckdb
 data/*.duckdb.wal
+data/*.duckdb*
 *.db
 *.sqlite3
 
@@ -36,7 +44,7 @@ dist/
 connectors-ts/dist/
 build/
 *.egg-info/
+core-engine/src/*.egg-info/
 node_modules/
 package-lock.json
 coverage/
-

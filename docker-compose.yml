@@ -14,6 +14,7 @@ services:
     environment:
       - PORT=3000
       - WEBHOOK_HMAC_SECRET=${WEBHOOK_HMAC_SECRET:-default-hmac-secret}
+      - ENFORCE_HMAC=${ENFORCE_HMAC:-false}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
       interval: 5s
@@ -34,6 +35,7 @@ services:
         condition: service_healthy
     environment:
       - SOURCE_ENGINE=${SOURCE_ENGINE:-duckdb_local}
+      - DEMO_SEED_ENABLED=${DEMO_SEED_ENABLED:-true}
       - DUCKDB_DATABASE_PATH=/app/data/local_warehouse.duckdb
       - HUBSPOT_API_BASE_URL=http://connectors-ts:3000
       - WEBHOOK_HMAC_SECRET=${WEBHOOK_HMAC_SECRET:-default-hmac-secret}
@@ -61,10 +63,14 @@ services:
     environment:
       - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - PYTHONPATH=/opt/airflow/core-engine/src
       - SOURCE_ENGINE=${SOURCE_ENGINE:-duckdb_local}
+      - DEMO_SEED_ENABLED=${DEMO_SEED_ENABLED:-true}
+      - DUCKDB_DATABASE_PATH=/opt/airflow/data/local_warehouse.duckdb
       - HUBSPOT_API_BASE_URL=http://connectors-ts:3000
     volumes:
       - ./orchestration/dags:/opt/airflow/dags:ro
+      - ./core-engine:/opt/airflow/core-engine:ro
       - ./syncs:/opt/airflow/syncs:ro
       - ./data:/opt/airflow/data
     ports:
@@ -74,4 +80,3 @@ services:
       resources:
         limits:
           memory: 2G
-

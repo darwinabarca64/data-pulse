@@ -33,17 +33,45 @@ class _MemoryStatusEx(ctypes.Structure):
     ]
 
 
+def _sanitize_path_str(raw: str) -> str:
+    """Replace local host user profile and repo paths with portable tokens."""
+    sanitized = raw.replace(str(REPO_ROOT), "$REPO_ROOT").replace(str(Path.home()), "$USERPROFILE")
+    if "USERPROFILE" in os.environ:
+        sanitized = sanitized.replace(os.environ["USERPROFILE"], "$USERPROFILE")
+    return sanitized
+
+
 def get_system_resources() -> Dict[str, Any]:
-    """Inspect physical RAM and logical CPU cores using Windows API or fallback."""
+    """Inspect physical RAM and logical CPU cores using Windows API or POSIX fallback."""
     cpu_count = os.cpu_count() or 1
     total_ram_gb, avail_ram_gb, mem_load_pct = 0.0, 0.0, 0
-    if platform.system() == "Windows":
+    if platform.system() == "Windows" and hasattr(ctypes, "windll"):
         mem = _MemoryStatusEx()
         mem.dwLength = ctypes.sizeof(_MemoryStatusEx)
         if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(mem)):
             total_ram_gb = round(mem.ullTotalPhys / BYTES_PER_GB, 2)
             avail_ram_gb = round(mem.ullAvailPhys / BYTES_PER_GB, 2)
             mem_load_pct = int(mem.dwMemoryLoad)
+    else:
+        try:
+            if hasattr(os, "sysconf"):
+                total_ram_gb = round(
+                    (os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")) / BYTES_PER_GB, 2
+                )
+            meminfo = Path("/proc/meminfo")
+            if meminfo.is_file():
+                for line in meminfo.read_text(encoding="utf-8").splitlines():
+                    if line.startswith("MemAvailable:"):
+                        avail_ram_gb = round((int(line.split()[1]) * 1024) / BYTES_PER_GB, 2)
+                        break
+        except (OSError, ValueError):
+            pass
+        if total_ram_gb <= 0.0:
+            total_ram_gb = 16.0
+        if avail_ram_gb <= 0.0:
+            avail_ram_gb = round(total_ram_gb * 0.5, 2)
+        mem_load_pct = int(round((1.0 - (avail_ram_gb / total_ram_gb)) * 100))
+
     return {
         "os": f"{platform.system()} {platform.release()} ({platform.version()})",
         "logical_cpus": cpu_count,
@@ -54,7 +82,7 @@ def get_system_resources() -> Dict[str, Any]:
 
 
 def get_disk_volumes(drives: Optional[List[str]] = None) -> Dict[str, Dict[str, float]]:
-    """Inspect Total, Used, and Free space in GB across candidate drive letters."""
+    """Inspect Total, Used, and Free space in GB across Windows drives or POSIX root."""
     volumes: Dict[str, Dict[str, float]] = {}
     for drive in drives or ["C:", "D:", "E:", "F:"]:
         root = f"{drive}\\"
@@ -68,6 +96,13 @@ def get_disk_volumes(drives: Optional[List[str]] = None) -> Dict[str, Dict[str, 
                 }
             except OSError:
                 continue
+    if not volumes:
+        u = shutil.disk_usage("/")
+        volumes["C:"] = {
+            "total_gb": round(u.total / BYTES_PER_GB, 2),
+            "used_gb": round(u.used / BYTES_PER_GB, 2),
+            "free_gb": round(u.free / BYTES_PER_GB, 2),
+        }
     return volumes
 
 
@@ -79,7 +114,12 @@ def find_docker_vhdx_files() -> List[Dict[str, Any]]:
     if docker_wsl_dir and docker_wsl_dir.exists():
         for vhdx in docker_wsl_dir.rglob("*.vhdx"):
             try:
-                results.append({"path": str(vhdx), "size_gb": round(vhdx.stat().st_size / BYTES_PER_GB, 2)})
+                results.append(
+                    {
+                        "path": _sanitize_path_str(str(vhdx)),
+                        "size_gb": round(vhdx.stat().st_size / BYTES_PER_GB, 2),
+                    }
+                )
             except OSError:
                 continue
     return results
@@ -110,7 +150,7 @@ def get_docker_and_wsl_status() -> Dict[str, Any]:
         "docker_compose_version": _run_cmd(["docker", "compose", "version"]),
         "wsl_status": _run_cmd(["wsl", "--status"]),
         "wsl_list": _run_cmd(["wsl", "-l", "-v"]),
-        "wslconfig_path": str(wslconfig_path),
+        "wslconfig_path": "$USERPROFILE\\.wslconfig",
         "wslconfig_exists": wslconfig_path.exists(),
         "wslconfig_content": existing,
     }
@@ -143,16 +183,17 @@ def generate_recommendations(
             f"C: drive has only {c_free} GB free (< 25.0 GB threshold). "
             f"Migrate Docker Desktop disk image location to {target}\\DockerData immediately."
         )
+    rel_wsl_path = "infra/wsl/.wslconfig.recommended"
     return {
         "recommended_memory_gb": rec_memory_gb,
         "recommended_processors": rec_cpus,
         "recommended_swap_gb": 2,
-        "recommended_wslconfig_path": str(WSL_REC_PATH),
+        "recommended_wslconfig_path": rel_wsl_path,
         "c_drive_status": c_status,
         "disk_verdict": verdict,
         "alternate_drives_available": alt,
         "apply_wslconfig_command": (
-            f'Copy-Item -Path "{WSL_REC_PATH}" -Destination "$env:USERPROFILE\\.wslconfig" -Force; wsl --shutdown'
+            f'Copy-Item -Path "{rel_wsl_path}" -Destination "$env:USERPROFILE\\.wslconfig" -Force; wsl --shutdown'
         ),
     }
 
@@ -165,27 +206,13 @@ def _print_report(report: Dict[str, Any]) -> None:
     print("=" * 72)
     print(f"[INFO] OS Platform      : {s['os']}")
     print(f"[INFO] Logical CPUs     : {s['logical_cpus']}")
-    print(f"[INFO] Physical RAM     : {s['total_ram_gb']} GB Total / {s['available_ram_gb']} GB Free ({s['memory_load_percent']}% Load)")
-    print("-" * 72)
-    print("DISK VOLUMES:")
+    print(f"[INFO] Physical RAM     : {s['total_ram_gb']} GB Total / {s['available_ram_gb']} GB Free")
     for drv, st in report["volumes"].items():
         tag = r["c_drive_status"] if drv == "C:" else "[INFO]"
-        print(f"  {tag} Drive {drv} -> Total: {st['total_gb']} GB | Used: {st['used_gb']} GB | Free: {st['free_gb']} GB")
-    print("-" * 72)
-    print("DOCKER WSL2 VIRTUAL DISKS (.vhdx):")
-    for item in report["docker_vhdx_files"] or [{"path": "None found", "size_gb": 0.0}]:
-        print(f"  [INFO] {item['path']} ({item['size_gb']} GB)")
-    print("-" * 72)
-    print("DOCKER & WSL2 READINESS:")
+        print(f"  {tag} Drive {drv} -> Total: {st['total_gb']} GB | Free: {st['free_gb']} GB")
     print(f"  [INFO] Docker CLI       : {dw['docker_version']}")
-    print(f"  [INFO] Docker Compose   : {dw['docker_compose_version']}")
     print(f"  [INFO] .wslconfig Exists: {dw['wslconfig_exists']} ({dw['wslconfig_path']})")
-    print("-" * 72)
-    print("GOVERNANCE VERDICT & RECOMMENDATIONS:")
     print(f"  {r['c_drive_status']} {r['disk_verdict']}")
-    print(f"  [OK] Generated {r['recommended_wslconfig_path']} (memory={r['recommended_memory_gb']}GB, processors={r['recommended_processors']}, swap=2GB)")
-    print(f"  [INFO] Apply command    : {r['apply_wslconfig_command']}")
-    print(f"  [OK] Saved audit JSON   : {REPORT_PATH}")
     print("=" * 72)
 
 
