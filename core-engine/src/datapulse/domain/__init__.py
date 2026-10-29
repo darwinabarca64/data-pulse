@@ -13,6 +13,7 @@ from datapulse.domain.models import (
     DLQRecord,
     DLQStage,
 )
+from datapulse.domain.ports import WarehouseAdapterPort
 
 __all__ = [
     "AIEnrichmentConfig",
@@ -24,6 +25,7 @@ __all__ = [
     "RateLimitConfig",
     "SourceConfig",
     "SyncManifest",
+    "WarehouseAdapterPort",
 ]
 
 
