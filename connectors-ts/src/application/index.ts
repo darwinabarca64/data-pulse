@@ -1,5 +1,4 @@
 /**
- * Application Layer: TypeScript Connector Use Cases and Payload Validation Services.
+ * Application Layer Exports for TypeScript CRM Connector.
  */
-export {};
-
+export * from "./resilience.js";

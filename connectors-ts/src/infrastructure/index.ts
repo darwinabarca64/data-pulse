@@ -1,5 +1,5 @@
 /**
- * Infrastructure Layer: HTTP Server, HMAC Verification, and Destination Adapters.
+ * Infrastructure Layer Exports for TypeScript CRM Connector.
  */
-export {};
-
+export * from "./dashboard_view.js";
+export * from "./server.js";

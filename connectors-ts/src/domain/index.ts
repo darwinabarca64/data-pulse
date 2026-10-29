@@ -1,5 +1,4 @@
 /**
- * Domain Layer: TypeScript Connector Entities, Value Objects, and Port Interfaces.
+ * Domain Layer Exports for TypeScript CRM Connector.
  */
-export {};
-
+export * from "./contracts.js";

@@ -1,0 +1,23 @@
+{
+  "name": "@datapulse/connectors-ts",
+  "version": "0.1.0",
+  "description": "DataPulse TypeScript CRM Connector Microservice & Live Executive Monitor",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "start": "tsx src/infrastructure/server.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "tsx": "^4.15.0",
+    "typescript": "^5.5.2",
+    "vitest": "^1.6.0"
+  }
+}
+
