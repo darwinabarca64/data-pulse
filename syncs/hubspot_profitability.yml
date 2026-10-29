@@ -1,0 +1,39 @@
+version: "1.0"
+sync_id: "hubspot_customer_profitability"
+description: "Incremental Reverse ETL sync of customer profitability marts to HubSpot CRM v3"
+schedule: "*/15 * * * *"
+
+source:
+  engine_env: "SOURCE_ENGINE"
+  target_table: "analytics_prod.marts.fct_customer_profitability"
+  watermark_column: "updated_at"
+  lookback_window_minutes: 15
+  primary_key: "customer_id"
+  batch_size: 1000
+
+ai_enrichment:
+  enabled: true
+  executive_brief_threshold_margin_drop_pct: -10.0
+  dlq_auto_triage: true
+
+destination:
+  connector: "hubspot_crm_v3"
+  object_type: "contacts"
+  operation: "batch_upsert"
+  idempotency_match_key: "email"
+  rate_limit:
+    max_requests: 100
+    per_seconds: 10
+  field_mapping:
+    customer_id: "datapulse_customer_id"
+    email: "email"
+    company_name: "company"
+    country_code: "country"
+    currency_code: "hs_currency_code"
+    annual_revenue: "annualrevenue"
+    annual_cost: "datapulse_annual_cost"
+    net_profitability_usd: "datapulse_net_profitability_usd"
+    profit_margin_pct: "datapulse_profit_margin_pct"
+    customer_tier: "datapulse_customer_tier"
+    ai_executive_brief: "datapulse_ai_executive_brief"
+
