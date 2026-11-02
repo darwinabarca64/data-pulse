@@ -30,6 +30,8 @@ infra/keys
 *.key
 AUDIT-REPORT.md
 MANUAL-MAESTRO-DARWIN-ES.md
+REPRODUCIR-EN-VIVO-PASO-A-PASO.md
+MISSION-CONTROL-SCRATCHPAD.md
 docs/runbooks/hardware_audit_report.json
 infra/wsl/.wslconfig.recommended
 

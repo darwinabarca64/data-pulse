@@ -5,6 +5,11 @@
 .idea/
 AUDIT-REPORT.md
 MANUAL-MAESTRO-DARWIN-ES.md
+REPRODUCIR-EN-VIVO-PASO-A-PASO.md
+MISSION-CONTROL-SCRATCHPAD.md
+docs/assets/scratchpad/
+GUIA_DE_USO_DATAPULSE.md
+INFORME_MAESTRO_DATAPULSE.md
 
 # Machine-Generated Hardware & WSL2 Telemetry Artifacts
 docs/runbooks/hardware_audit_report.json

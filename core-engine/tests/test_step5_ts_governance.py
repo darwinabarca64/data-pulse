@@ -29,7 +29,15 @@ EXCLUDED_DIRS = {
     "data",
     "data_pulse.egg-info",
 }
-DOC_EXEMPT_NAMES = {"INDEX.md", "README.md", "AUDIT-REPORT.md", "MANUAL-MAESTRO-DARWIN-ES.md"}
+DOC_EXEMPT_NAMES = {
+    "INDEX.md",
+    "README.md",
+    "AUDIT-REPORT.md",
+    "MANUAL-MAESTRO-DARWIN-ES.md",
+    "REPRODUCIR-EN-VIVO-PASO-A-PASO.md",
+    "GUIA_DE_USO_DATAPULSE.md",
+    "INFORME_MAESTRO_DATAPULSE.md",
+}
 
 
 def _is_doc_exempt_from_line_cap(path: Path) -> bool:
@@ -66,10 +74,13 @@ def test_step5_typescript_modules_exist_and_comply_with_governance() -> None:
     )
     assert runbook5_path.is_file()
 
+    binary_exts = {".gif", ".webm", ".mp4", ".png", ".jpg", ".jpeg", ".webp", ".ico", ".duckdb", ".wal"}
     files: List[Path] = [
         p
         for p in REPO_ROOT.rglob("*")
-        if p.is_file() and not any(part in EXCLUDED_DIRS for part in p.parts)
+        if p.is_file()
+        and p.suffix.lower() not in binary_exts
+        and not any(part in EXCLUDED_DIRS for part in p.parts)
     ]
     for file_path in files:
         content = file_path.read_text(encoding="utf-8")

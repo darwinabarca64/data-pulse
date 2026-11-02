@@ -144,10 +144,22 @@ describe("Step 5: TypeScript Connector Domain, Resilience & HTTP Server", () => 
       expect(store.rateLimitRetriesAbsorbed).toBe(1);
       expect(store.getState().totalSyncedContacts).toBe(1);
 
+      const telResp = await fetch(`${baseUrl}/api/v1/telemetry`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPhase: "PHASE 4: SHA-256 IDEMPOTENCY VERIFIED", skippedO: 10000 }),
+      });
+      expect(telResp.status).toBe(200);
+
       const dashResp = await fetch(`${baseUrl}/`);
       expect(dashResp.status).toBe(200);
       const html = await dashResp.text();
       expect(html).toContain("DataPulse Reverse ETL");
+      expect(html).toContain("Pillar 1: Warehouse &amp; FinOps Guardrails");
+      expect(html).toContain("Pillar 2: Apache Airflow Thin DAG");
+      expect(html).toContain("Pillar 3: N = S + O + E &amp; Out-of-Band AI DLQ Doctor");
+      expect(html).toContain("Pillar 4 (HubSpot CRM v3 Store)");
+      expect(html).toContain("PHASE 4: SHA-256 IDEMPOTENCY VERIFIED");
       expect(html).toContain("[VIP-BRIEF]");
       expect(html).toContain("CUST-00001");
       expect(EMOJI_REGEX.test(html)).toBe(false);

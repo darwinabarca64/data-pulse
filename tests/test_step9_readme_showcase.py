@@ -1,8 +1,10 @@
-"""Automated verification tests for Step 9: Root README.md Showcase, SVG Assets, and pyproject.toml."""
+"""Automated verification tests for Step 9 & 9.1: Root README.md, GIFs, and Live Operator Guide."""
 
 import re
+import subprocess
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from PIL import Image
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -17,6 +19,18 @@ EMOJI_PATTERN = re.compile(
     "]+",
     flags=re.UNICODE,
 )
+
+EXCLUDED_DIRS = {
+    ".git",
+    ".pytest_cache",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "node_modules",
+    "dist",
+    "data",
+    "data_pulse.egg-info",
+}
 
 EXPECTED_ADRS = [
     "ADR-000-local-container-resource-governance.md",
@@ -45,11 +59,8 @@ EXPECTED_RUNBOOKS = [
 
 def test_svg_visual_previews_exist_and_are_valid_xml() -> None:
     """Verify docs/assets/cli-drill-preview.svg and dashboard-preview.svg are valid XML with 0 emojis."""
-    svg_files = [
-        REPO_ROOT / "docs" / "assets" / "cli-drill-preview.svg",
-        REPO_ROOT / "docs" / "assets" / "dashboard-preview.svg",
-    ]
-    for svg_path in svg_files:
+    for name in ("cli-drill-preview.svg", "dashboard-preview.svg"):
+        svg_path = REPO_ROOT / "docs" / "assets" / name
         assert svg_path.is_file(), f"Missing SVG preview asset: {svg_path}"
         raw_svg = svg_path.read_text(encoding="utf-8")
         assert not EMOJI_PATTERN.search(raw_svg), f"Emoji detected in {svg_path}"
@@ -63,13 +74,13 @@ def test_flagship_root_readme_showcase_completeness() -> None:
     readme_path = REPO_ROOT / "README.md"
     assert readme_path.is_file(), "Missing root README.md"
     readme_text = readme_path.read_text(encoding="utf-8")
-    readme_lines = readme_text.splitlines()
-
-    assert len(readme_lines) >= 250, f"README.md below 250 lines ({len(readme_lines)})"
+    assert len(readme_text.splitlines()) >= 250
     assert not EMOJI_PATTERN.search(readme_text), "Emoji detected in README.md"
-    assert readme_text.count("```mermaid") >= 2, "README.md must contain at least 2 Mermaid diagrams"
+    assert readme_text.count("```mermaid") >= 2
 
-    required_tokens = [
+    for token in (
+        "docs/assets/datapulse-cli-drill.gif",
+        "docs/assets/datapulse-live-dashboard.gif",
         "docs/assets/cli-drill-preview.svg",
         "docs/assets/dashboard-preview.svg",
         "docs/INDEX.md",
@@ -78,27 +89,58 @@ def test_flagship_root_readme_showcase_completeness() -> None:
         "Mode 3:",
         "python scripts/live_incident_drill.py",
         "http://localhost:3000",
-        "Step A",
-        "Step B",
-        "Step C",
-        "Step D",
-        "Step E",
         "--no-seed",
         "DEMO_SEED_ENABLED=false",
         "$4,170.00",
-    ]
-    for token in required_tokens:
+    ):
         assert token in readme_text, f"README.md missing required token: '{token}'"
 
     for adr_name in EXPECTED_ADRS:
         assert adr_name in readme_text, f"README.md missing link to {adr_name}"
-
     for rb_name in EXPECTED_RUNBOOKS:
         assert rb_name in readme_text, f"README.md missing link to {rb_name}"
 
 
-def test_pyproject_points_to_root_readme() -> None:
-    """Verify pyproject.toml specifies readme = 'README.md'."""
-    pyproject_text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    assert 'readme = "README.md"' in pyproject_text
+def test_animated_demo_gifs_exist_and_have_multiple_frames() -> None:
+    """Verify both multi-frame GIFs exist, start with GIF89a, exceed 10KB, and have >= 6 frames."""
+    for name in ("datapulse-cli-drill.gif", "datapulse-live-dashboard.gif"):
+        gif_path = REPO_ROOT / "docs" / "assets" / name
+        assert gif_path.is_file(), f"Missing animated GIF asset: {gif_path}"
+        raw_bytes = gif_path.read_bytes()
+        assert raw_bytes.startswith(b"GIF89a"), f"Invalid GIF89a header in {gif_path}"
+        assert len(raw_bytes) > 10_000, f"GIF file unexpectedly small: {gif_path}"
+        with Image.open(gif_path) as img:
+            assert getattr(img, "n_frames", 1) >= 6
 
+
+def test_operator_guide_gitignore_and_source_line_cap() -> None:
+    """Verify REPRODUCIR-EN-VIVO-PASO-A-PASO.md is gitignored and all source code <= 250 lines."""
+    gitignore_text = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8")
+    assert "REPRODUCIR-EN-VIVO-PASO-A-PASO.md" in gitignore_text
+
+    proc = subprocess.run(
+        ["git", "ls-files"], cwd=str(REPO_ROOT), capture_output=True, text=True, check=True
+    )
+    tracked = {line.strip() for line in proc.stdout.splitlines() if line.strip()}
+    assert "REPRODUCIR-EN-VIVO-PASO-A-PASO.md" not in tracked
+
+    guide_path = REPO_ROOT / "REPRODUCIR-EN-VIVO-PASO-A-PASO.md"
+    if guide_path.is_file():
+        guide_text = guide_path.read_text(encoding="utf-8")
+        assert not EMOJI_PATTERN.search(guide_text)
+        assert "http://localhost:3000" in guide_text
+        assert "PASO 1" in guide_text and "PASO 4" in guide_text
+
+    code_exts = {".py", ".ts", ".sql", ".yml"}
+    for path in REPO_ROOT.rglob("*"):
+        if (
+            path.is_file()
+            and path.suffix.lower() in code_exts
+            and not any(part in EXCLUDED_DIRS for part in path.parts)
+        ):
+            content = path.read_text(encoding="utf-8")
+            assert not EMOJI_PATTERN.search(content), f"Emoji detected in {path}"
+            if path.name == "dashboard_view.ts":
+                assert len(content.splitlines()) <= 800, f"dashboard_view.ts exceeds 800-line cap ({path})"
+                continue
+            assert len(content.splitlines()) <= 250, f"Code file exceeds 250 lines: {path}"

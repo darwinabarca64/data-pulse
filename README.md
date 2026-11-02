@@ -40,13 +40,25 @@ Modern data teams syncing analytical marts from Cloud Data Warehouses (**Snowfla
 
 ### 1. Four-Phase Cross-Language Live Incident Drill (`python scripts/live_incident_drill.py`)
 
+![DataPulse 4-Phase CLI Incident Drill Animated GIF](./docs/assets/datapulse-cli-drill.gif)
+
+<details>
+<summary>View High-DPI Static Vector Snapshot (<code>docs/assets/cli-drill-preview.svg</code>)</summary>
+
 ![DataPulse 4-Phase CLI Incident Drill Preview](./docs/assets/cli-drill-preview.svg)
-<!-- Optional Animated GIF Slot: ![CLI Incident Drill GIF](./docs/assets/datapulse-cli-drill.gif) -->
+
+</details>
 
 ### 2. Live SSR Executive CRM & FinOps Telemetry Monitor (`http://localhost:3000`)
 
+![DataPulse Live Executive CRM Dashboard Animated GIF](./docs/assets/datapulse-live-dashboard.gif)
+
+<details>
+<summary>View High-DPI Static Vector Snapshot (<code>docs/assets/dashboard-preview.svg</code>)</summary>
+
 ![DataPulse Live Executive CRM Dashboard Preview](./docs/assets/dashboard-preview.svg)
-<!-- Optional Animated GIF Slot: ![Live Dashboard GIF](./docs/assets/datapulse-live-dashboard.gif) -->
+
+</details>
 
 ---
 
