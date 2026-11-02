@@ -26,11 +26,8 @@ export interface ConnectorServerOptions {
 
 function findRepoRoot(): string {
   let cur = process.cwd();
-  for (let i = 0; i < 4; i++) {
-    if (fs.existsSync(path.join(cur, "syncs"))) return cur;
-    cur = path.resolve(cur, "..");
-  }
-  return process.cwd();
+  for (let i = 0; i < 4 && !fs.existsSync(path.join(cur, "syncs")); i++) cur = path.resolve(cur, "..");
+  return fs.existsSync(path.join(cur, "syncs")) ? cur : process.cwd();
 }
 
 function runPythonCli(args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
@@ -40,10 +37,9 @@ function runPythonCli(args: string[]): Promise<{ code: number; stdout: string; s
       cwd: root,
       env: { ...process.env, PYTHONPATH: path.join(root, "core-engine", "src") },
     });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString("utf-8"); });
-    child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString("utf-8"); });
+    let stdout = "", stderr = "";
+    child.stdout.on("data", (c: Buffer) => { stdout += c.toString("utf-8"); });
+    child.stderr.on("data", (c: Buffer) => { stderr += c.toString("utf-8"); });
     child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr }));
     child.on("error", (err) => resolve({ code: 1, stdout, stderr: err.message }));
   });
@@ -87,6 +83,20 @@ export class CrmMemoryStore {
     return { acceptedIds: this.upsertContacts(validRecords), rejectedRecords };
   }
 
+  public queryContacts(options: { q?: string; tab?: string; offset?: number; limit?: number }) {
+    const q = (options.q ?? "").trim().toLowerCase();
+    const tab = options.tab ?? "all";
+    const offset = Math.max(0, options.offset ?? 0);
+    const limit = Math.max(1, Math.min(100, options.limit ?? 25));
+    let list = Array.from(this.contactsById.values());
+    if (tab === "vip") list = list.filter((c) => Boolean(c.ai_executive_brief) || c.customer_tier.includes("VIP"));
+    else if (tab === "repaired") list = list.filter((c) => c.remediated_from_dlq || c.customer_id >= "CUST-09801");
+    if (q) {
+      list = list.filter((c) => c.customer_id.toLowerCase().includes(q) || c.email.toLowerCase().includes(q) || (c.company && c.company.toLowerCase().includes(q)) || c.customer_tier.toLowerCase().includes(q));
+    }
+    return { total: list.length, offset, limit, contacts: list.slice(offset, offset + limit) };
+  }
+
   public updateTelemetry(update: TelemetryOverlay): void {
     this.telemetry = { ...this.telemetry, ...update };
   }
@@ -126,27 +136,9 @@ export class CrmMemoryStore {
     const isPhase3Or4 = totalSynced >= 10000 || remediatedCount > 0;
     const isStage0 = totalSynced === 0 && (this.telemetry.extractedN ?? 0) === 0;
 
-    const defaultPhase = isStage0
-      ? "STAGE 0: BASELINE IDLE (0 CONTACTS SYNCED)"
-      : isPhase3Or4
-        ? (this.telemetry.skippedO ?? 0) >= 10000
-          ? "PHASE 4: SHA-256 IDEMPOTENCY VERIFIED (0 HTTP CALLS)"
-          : "PHASE 3: SURGICAL DLQ REPLAY (10,000/10,000 CONVERGED)"
-        : isPhase1Or2
-          ? "PHASE 1: INITIAL SYNC (9,800 SYNCED | 200 QUARANTINED)"
-          : (this.telemetry.currentPhase ?? "STAGE 0: BASELINE IDLE (0 CONTACTS SYNCED)");
-
-    const defaultDag = isStage0
-      ? "IDLE (SCHEDULE: 0 * * * *)"
-      : isPhase3Or4
-        ? "SUCCESS (<0.05s PARSE SLA)"
-        : isPhase1Or2
-          ? "RUNNING -> AUDIT_DLQ_TELEMETRY"
-          : (this.telemetry.dagStatus ?? "IDLE (SCHEDULE: 0 * * * *)");
-
-    const defaultWatermark = isStage0
-      ? "Standby (Awaiting Ingestion Pipeline)"
-      : "2026-10-29T02:46:40Z (15m Lookback)";
+    const defaultPhase = isStage0 ? "STAGE 0: BASELINE IDLE (0 CONTACTS SYNCED)" : isPhase3Or4 ? ((this.telemetry.skippedO ?? 0) >= 10000 ? "PHASE 4: SHA-256 IDEMPOTENCY VERIFIED (0 HTTP CALLS)" : "PHASE 3: SURGICAL DLQ REPLAY (10,000/10,000 CONVERGED)") : isPhase1Or2 ? "PHASE 1: INITIAL SYNC (9,800 SYNCED | 200 QUARANTINED)" : (this.telemetry.currentPhase ?? "STAGE 0: BASELINE IDLE (0 CONTACTS SYNCED)");
+    const defaultDag = isStage0 ? "IDLE (SCHEDULE: 0 * * * *)" : isPhase3Or4 ? "SUCCESS (<0.05s PARSE SLA)" : isPhase1Or2 ? "RUNNING -> AUDIT_DLQ_TELEMETRY" : (this.telemetry.dagStatus ?? "IDLE (SCHEDULE: 0 * * * *)");
+    const defaultWatermark = isStage0 ? "Standby (Awaiting Ingestion Pipeline)" : "2026-10-29T02:46:40Z (15m Lookback)";
 
     const extractedN = this.telemetry.extractedN ?? totalSynced;
     const syncedS = this.telemetry.syncedS ?? totalSynced;
@@ -154,12 +146,8 @@ export class CrmMemoryStore {
     const dlqPendingE = this.telemetry.dlqPendingE ?? (isPhase1Or2 ? 200 : this.rejectedRecordCount);
     const dlqResolved = this.telemetry.dlqResolved ?? remediatedCount;
 
-    const segmentBreakdown: SegmentBreakdown = {
-      ENTERPRISE_VIP: { annual_revenue: 0, annual_cost: 0, net_profitability_usd: 0, count: 0 },
-      ENTERPRISE: { annual_revenue: 0, annual_cost: 0, net_profitability_usd: 0, count: 0 },
-      MID_MARKET: { annual_revenue: 0, annual_cost: 0, net_profitability_usd: 0, count: 0 },
-      SME: { annual_revenue: 0, annual_cost: 0, net_profitability_usd: 0, count: 0 },
-    };
+    const eTier = () => ({ annual_revenue: 0, annual_cost: 0, net_profitability_usd: 0, count: 0 });
+    const segmentBreakdown: SegmentBreakdown = { ENTERPRISE_VIP: eTier(), ENTERPRISE: eTier(), MID_MARKET: eTier(), SME: eTier() };
     for (const c of allContacts) {
       const tier = (c.customer_tier in segmentBreakdown ? c.customer_tier : "ENTERPRISE") as keyof SegmentBreakdown;
       const b = segmentBreakdown[tier];
@@ -248,6 +236,14 @@ export function createConnectorServer(options: ConnectorServerOptions = {}): { s
       sendJson(res, 200, store.getState());
       return;
     }
+    if (method === "GET" && pathname === "/api/v1/contacts") {
+      const q = urlObj.searchParams.get("q") ?? "";
+      const tab = urlObj.searchParams.get("tab") ?? "all";
+      const offset = parseInt(urlObj.searchParams.get("offset") ?? "0", 10) || 0;
+      const limit = parseInt(urlObj.searchParams.get("limit") ?? "25", 10) || 25;
+      sendJson(res, 200, store.queryContacts({ q, tab, offset, limit }));
+      return;
+    }
     if (method === "POST" && pathname === "/api/v1/telemetry") {
       try {
         store.updateTelemetry(JSON.parse(await readRequestBody(req)) as TelemetryOverlay);
@@ -272,17 +268,16 @@ export function createConnectorServer(options: ConnectorServerOptions = {}): { s
           store.reset();
           sendJson(res, 200, { ok: true, phase, state: store.getState(), consoleOutput: "[OK] Reset to Stage 0 Baseline." });
           return;
-        } else if (phase === "init") {
-          cliArgs = ["init", "--rows", "10000"];
-        } else if (phase === "sync") {
-          cliArgs = ["run", "--manifest", "syncs/hubspot_profitability.yml"];
-        } else if (phase === "inspect") {
-          cliArgs = ["dlq", "inspect", "--sync-id", "hubspot_customer_profitability"];
-        } else if (phase === "replay") {
-          cliArgs = ["dlq", "replay", "--manifest", "syncs/hubspot_profitability.yml"];
-        } else if (phase === "idempotent") {
-          cliArgs = ["run", "--manifest", "syncs/hubspot_profitability.yml"];
-        } else {
+        }
+        const phaseArgs: Record<string, string[]> = {
+          init: ["init", "--rows", "10000"],
+          sync: ["run", "--manifest", "syncs/hubspot_profitability.yml"],
+          inspect: ["dlq", "inspect", "--sync-id", "hubspot_customer_profitability"],
+          replay: ["dlq", "replay", "--manifest", "syncs/hubspot_profitability.yml"],
+          idempotent: ["run", "--manifest", "syncs/hubspot_profitability.yml"],
+        };
+        cliArgs = phaseArgs[phase];
+        if (!cliArgs) {
           sendJson(res, 400, { ok: false, message: `Unsupported phase action: ${phase}` });
           return;
         }

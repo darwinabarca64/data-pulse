@@ -1,7 +1,5 @@
 /**
- * Infrastructure Layer: Style 1 - Shadcn/UI & Power BI Executive Dashboard.
- * Monochromatic Inter typography, sleek geometric SaaS branding, live dynamic Bezier Area Chart,
- * interactive pipeline controls, clickable (i) info popovers, and slide-over customer payload inspection.
+ * Infrastructure Layer: 4-Pillar Unified Visual Mission Control Scratchpad Renderer.
  */
 
 import { NormalizedCrmContact } from "../domain/contracts.js";
@@ -15,18 +13,11 @@ export interface BatchHistoryEntry {
   timestamp: string;
 }
 
-export interface SegmentMetrics {
-  annual_revenue: number;
-  annual_cost: number;
-  net_profitability_usd: number;
-  count: number;
-}
-
 export interface SegmentBreakdown {
-  ENTERPRISE_VIP: SegmentMetrics;
-  ENTERPRISE: SegmentMetrics;
-  MID_MARKET: SegmentMetrics;
-  SME: SegmentMetrics;
+  ENTERPRISE_VIP: { annual_revenue: number; annual_cost: number; net_profitability_usd: number; count: number };
+  ENTERPRISE: { annual_revenue: number; annual_cost: number; net_profitability_usd: number; count: number };
+  MID_MARKET: { annual_revenue: number; annual_cost: number; net_profitability_usd: number; count: number };
+  SME: { annual_revenue: number; annual_cost: number; net_profitability_usd: number; count: number };
 }
 
 export interface TelemetryOverlay {
@@ -74,43 +65,24 @@ function escapeHtml(text: string): string {
   return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-function renderInitialRows(contacts: NormalizedCrmContact[], isZero: boolean): string {
-  if (isZero || !contacts || contacts.length === 0) {
-    return '<tr><td colspan="8" class="p-12 text-center text-xs text-zinc-500 font-mono">Stage 0 Baseline: 0 Contacts in CRM. Ingestion pipeline is idle. Click "1. Run Sync" above to stream batches...</td></tr>';
-  }
-  return contacts.slice(0, 50).map((c) => {
-    const isVip = Boolean(c.ai_executive_brief) || c.customer_tier.includes("VIP");
-    const isHealed = c.remediated_from_dlq || (c.customer_id >= "CUST-09801");
-    const statusPill = isVip
-      ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20"><span class="w-1.5 h-1.5 rounded-full bg-rose-500 mr-1.5"></span>VIP At Risk</span>'
-      : isHealed
-        ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>Auto-Repaired</span>'
-        : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>Delivered</span>';
-    const briefCell = c.ai_executive_brief
-      ? `<div class="flex items-center gap-1.5"><span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0">[VIP-BRIEF]</span><span class="text-xs text-zinc-700 dark:text-zinc-300 truncate max-w-xs">${escapeHtml(c.ai_executive_brief)}</span></div>`
-      : isHealed
-        ? '<span class="text-xs text-zinc-500 dark:text-zinc-400">Remediated via AI DLQ Doctor (RFC-5322 regex / coalesce)</span>'
-        : '<span class="text-xs text-zinc-400 dark:text-zinc-500">Standard Margin Profile - Normal Rhythm</span>';
-    const marginBadge = `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold ${c.profit_margin_pct < 0 ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20" : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"}">${c.profit_margin_pct < 0 ? "" : "+"}${c.profit_margin_pct.toFixed(1)}%</span>`;
-    const tierBadge = `<span class="px-2 py-0.5 rounded text-xs font-medium ${isVip ? "bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/20" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700"}">${escapeHtml(c.customer_tier)}</span>`;
-    const safeJson = escapeHtml(JSON.stringify(c));
-    return `<tr class="customer-row border-b border-zinc-200/80 dark:border-zinc-800 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors cursor-pointer" data-contact="${safeJson}">` +
-      `<td class="p-3"><input type="checkbox" class="rounded border-zinc-300 dark:border-zinc-700"></td>` +
-      `<td class="p-3"><div class="font-medium text-xs text-zinc-950 dark:text-zinc-50 font-mono">${escapeHtml(c.customer_id)}</div><div class="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono">${escapeHtml(c.email)} &bull; ${escapeHtml(c.company || "Enterprise Account")} &bull; ${escapeHtml(c.country || "US")}</div></td>` +
-      `<td class="p-3">${tierBadge}</td>` +
-      `<td class="p-3">${statusPill}</td>` +
-      `<td class="p-3 font-mono text-xs font-semibold text-zinc-950 dark:text-zinc-50">$${c.net_profitability_usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>` +
-      `<td class="p-3">${marginBadge}</td>` +
-      `<td class="p-3">${briefCell}</td>` +
-      `<td class="p-3 text-right"><button type="button" class="btn-inspect px-2.5 py-1 rounded text-xs font-medium border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition">Inspect</button></td>` +
-      `</tr>`;
-  }).join("\n");
+function formatRowSsr(c: NormalizedCrmContact): string {
+  const isVip = Boolean(c.ai_executive_brief) || c.customer_tier.includes("VIP");
+  const isHealed = c.remediated_from_dlq || (c.customer_id >= "CUST-09801");
+  const statusPill = isVip ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20"><span class="w-1.5 h-1.5 rounded-full bg-rose-500 mr-1.5"></span>VIP At Risk</span>' : isHealed ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>Auto-Repaired</span>' : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>Delivered</span>';
+  const briefCell = c.ai_executive_brief ? `<div class="flex items-center gap-1.5"><span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0">[VIP-BRIEF]</span><span class="text-xs text-zinc-700 dark:text-zinc-300 truncate max-w-xs">${escapeHtml(c.ai_executive_brief)}</span></div>` : isHealed ? '<span class="text-xs text-zinc-500 dark:text-zinc-400">Remediated via AI DLQ Doctor (RFC-5322 regex / coalesce)</span>' : '<span class="text-xs text-zinc-400 dark:text-zinc-500">Standard Margin Profile - Normal Rhythm</span>';
+  const marginBadge = `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold ${c.profit_margin_pct < 0 ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20" : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"}">${c.profit_margin_pct < 0 ? "" : "+"}${c.profit_margin_pct.toFixed(1)}%</span>`;
+  const tierBadge = `<span class="px-2 py-0.5 rounded text-xs font-medium ${isVip ? "bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/20" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700"}">${escapeHtml(c.customer_tier)}</span>`;
+  const safeJson = escapeHtml(JSON.stringify(c));
+  return `<tr class="customer-row border-b border-zinc-200/80 dark:border-zinc-800 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors cursor-pointer" data-contact="${safeJson}" onclick="openInspectorFromRow(this)"><td class="p-3"><input type="checkbox" class="rounded border-zinc-300 dark:border-zinc-700" onclick="event.stopPropagation()"></td><td class="p-3"><div class="font-medium text-xs text-zinc-950 dark:text-zinc-50 font-mono">${escapeHtml(c.customer_id)}</div><div class="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono">${escapeHtml(c.email)} &bull; ${escapeHtml(c.company || "Enterprise Account")} &bull; ${escapeHtml(c.country || "US")}</div></td><td class="p-3">${tierBadge}</td><td class="p-3">${statusPill}</td><td class="p-3 font-mono text-xs font-semibold text-zinc-950 dark:text-zinc-50">$${c.net_profitability_usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td><td class="p-3">${marginBadge}</td><td class="p-3">${briefCell}</td><td class="p-3 text-right"><button type="button" class="btn-inspect px-2.5 py-1 rounded text-xs font-medium border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition" onclick="event.stopPropagation(); openInspectorFromRow(this.closest('tr'))">Inspect</button></td></tr>`;
 }
 
+function renderInitialRows(contacts: NormalizedCrmContact[], isZero: boolean): string {
+  if (isZero || !contacts || contacts.length === 0) return '<tr><td colspan="8" class="p-12 text-center text-xs text-zinc-500 font-mono">Stage 0 Baseline: 0 Contacts in CRM. Ingestion pipeline is idle. Click "1. Run Sync" above to stream batches...</td></tr>';
+  return contacts.slice(0, 25).map(formatRowSsr).join("\n");
+}
 
 export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""): string {
   const isZero = state.totalSyncedContacts === 0 && state.extractedN === 0;
-  const initialContactsJson = escapeHtml(JSON.stringify(state.contacts || []));
   const initialStateJson = escapeHtml(JSON.stringify(state));
 
   const syncedTrendHtml = isZero ? '<span class="inline-flex items-center font-medium text-zinc-500"><span class="w-1.5 h-1.5 rounded-full bg-zinc-400 mr-1.5"></span>Standby</span><span>&bull; Awaiting Sync</span>' : state.totalSyncedContacts >= 10000 ? '<span class="inline-flex items-center font-medium text-emerald-600 dark:text-emerald-400"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>100% Complete</span><span>&bull; Zero row loss</span>' : state.totalSyncedContacts >= 9800 ? '<span class="inline-flex items-center font-medium text-emerald-600 dark:text-emerald-400"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>+98.0% First Pass</span><span>&bull; 200 Held in DLQ</span>' : '<span class="inline-flex items-center font-medium text-blue-600 dark:text-blue-400"><span class="w-1.5 h-1.5 rounded-full bg-blue-500 mr-1.5 animate-pulse"></span>10k in Warehouse</span><span>&bull; Ready to Sync</span>';
@@ -135,9 +107,7 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
   <aside class="w-full md:w-64 border-b md:border-b-0 md:border-r border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-md p-4 shrink-0 flex flex-col justify-between">
     <div>
       <div class="flex items-center gap-3 px-2 py-2 mb-6">
-        <div class="flex aspect-square size-9 items-center justify-center rounded-lg bg-zinc-950 text-white dark:bg-white dark:text-zinc-950 shadow-sm">
-          <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-8 4.5v9L12 21l8-4.5v-9L12 3Z"/><path d="M12 12 4 7.5"/><path d="m12 12 8-4.5"/><path d="M12 12v9"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>
-        </div>
+        <div class="flex aspect-square size-9 items-center justify-center rounded-lg bg-zinc-950 text-white dark:bg-white dark:text-zinc-950 shadow-sm"><svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-8 4.5v9L12 21l8-4.5v-9L12 3Z"/><path d="M12 12 4 7.5"/><path d="m12 12 8-4.5"/><path d="M12 12v9"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg></div>
         <div class="flex flex-col"><span class="text-sm font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">DataPulse Reverse ETL</span><span class="text-[11px] text-zinc-500 dark:text-zinc-400">Executive Workspace</span></div>
       </div>
       <div class="mb-5 px-2">
@@ -156,10 +126,7 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
     </div>
     <div class="mt-6 pt-4 border-t border-zinc-200 dark:border-zinc-800">
       <div class="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30">
-        <div class="flex items-center justify-between text-[11px] font-medium text-zinc-700 dark:text-zinc-300">
-          <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>Live Engine</span>
-          <span class="font-mono text-zinc-500 dark:text-zinc-400 text-[10px]" id="sidebarEngine">${escapeHtml(state.activeEngine)}</span>
-        </div>
+        <div class="flex items-center justify-between text-[11px] font-medium text-zinc-700 dark:text-zinc-300"><span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>Live Engine</span><span class="font-mono text-zinc-500 dark:text-zinc-400 text-[10px]" id="sidebarEngine">${escapeHtml(state.activeEngine)}</span></div>
         <div class="mt-2 text-[10px] text-zinc-500 dark:text-zinc-400 flex items-center justify-between"><span>SLA: &lt;0.05s</span><span class="text-emerald-600 dark:text-emerald-400 font-medium">99.99% Uptime</span></div>
       </div>
     </div>
@@ -167,10 +134,7 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
 
   <main class="flex-1 flex flex-col min-w-0 overflow-y-auto" id="mainScrollContainer">
     <header class="border-b border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-md px-6 py-3 flex flex-col xl:flex-row xl:items-center justify-between gap-4 sticky top-0 z-30">
-      <div class="flex items-center gap-2">
-        <span class="text-xs text-zinc-400 dark:text-zinc-500">Data Pulse</span><span class="text-xs text-zinc-300 dark:text-zinc-700">/</span>
-        <h1 class="text-sm font-semibold text-zinc-950 dark:text-zinc-50 flex items-center gap-1.5">Executive Overview<button type="button" class="info-btn text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition p-0.5" onclick="openInfoPopover('overview')"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button></h1>
-      </div>
+      <div class="flex items-center gap-2"><span class="text-xs text-zinc-400 dark:text-zinc-500">Data Pulse</span><span class="text-xs text-zinc-300 dark:text-zinc-700">/</span><h1 class="text-sm font-semibold text-zinc-950 dark:text-zinc-50 flex items-center gap-1.5">Executive Overview<button type="button" class="info-btn text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition p-0.5" onclick="openInfoPopover('overview')"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button></h1></div>
       <div class="flex items-center gap-1.5 p-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 text-xs flex-wrap">
         <button type="button" id="btnRunSync" onclick="triggerPipelinePhase('sync')" class="pipeline-step-btn px-2.5 py-1 rounded-md font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-950 dark:hover:text-zinc-50 transition flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>1. Run Sync</button>
         <button type="button" id="btnRunRepair" onclick="triggerPipelinePhase('replay')" class="pipeline-step-btn px-2.5 py-1 rounded-md font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-950 dark:hover:text-zinc-50 transition flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>2. AI Repair</button>
@@ -182,10 +146,7 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
         <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono font-medium bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20" id="phase-banner"><span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>${escapeHtml(state.currentPhase)}</div>
         <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20" id="connPill"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500" id="connDot"></span><span id="connText">Connector Online</span></div>
         <button id="togglePollingBtn" type="button" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"><span class="w-2 h-2 rounded-full bg-emerald-500" id="pollingDot"></span><span id="pollingStatusText">Auto-Refresh (2s)</span></button>
-        <button id="themeToggleBtn" type="button" class="p-1.5 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition">
-          <svg id="moonIcon" class="w-4 h-4 hidden dark:block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
-          <svg id="sunIcon" class="w-4 h-4 block dark:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
-        </button>
+        <button id="themeToggleBtn" type="button" class="p-1.5 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"><svg id="moonIcon" class="w-4 h-4 hidden dark:block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg><svg id="sunIcon" class="w-4 h-4 block dark:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg></button>
       </div>
     </header>
 
@@ -196,7 +157,7 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
           <div class="mt-3"><div class="text-3xl font-bold tracking-tight text-zinc-950 dark:text-zinc-50" id="kpi-synced">${state.totalSyncedContacts.toLocaleString("en-US")}</div><div class="flex items-center gap-1.5 mt-2 text-xs text-zinc-500 dark:text-zinc-400 flex-wrap" id="kpi-synced-trend">${syncedTrendHtml}</div></div>
         </div>
         <div class="rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 p-5 shadow-sm hover:shadow transition-shadow">
-          <div class="flex items-center justify-between"><span class="text-xs font-medium text-zinc-500 dark:text-zinc-400 flex items-center">VIP Accounts at Risk<button type="button" class="info-btn text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition p-0.5 ml-1" onclick="openInfoPopover('vip')"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button></span><div class="w-7 h-7 rounded-md bg-rose-500/10 flex items-center justify-center text-rose-600 dark:text-rose-400"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div></div>
+          <div class="flex items-center justify-between"><span class="text-xs font-medium text-zinc-500 dark:text-zinc-400 flex items-center">VIP Accounts at Risk<button type="button" class="info-btn text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition p-0.5 ml-1" onclick="openInfoPopover('vip')"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button></span><div class="w-7 h-7 rounded-md bg-rose-500/10 flex items-center justify-center text-rose-600 dark:text-rose-400"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div></div>
           <div class="mt-3"><div class="text-3xl font-bold tracking-tight text-zinc-950 dark:text-zinc-50" id="kpi-vip">${state.vipBriefCount}</div><div class="flex items-center gap-1.5 mt-2 text-xs text-zinc-500 dark:text-zinc-400 flex-wrap" id="kpi-vip-trend">${vipTrendHtml}</div></div>
         </div>
         <div class="rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 p-5 shadow-sm hover:shadow transition-shadow cursor-pointer" onclick="toggleDlqAccordion(true)">
@@ -263,24 +224,12 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
         <div class="mt-4 relative">
           <svg class="w-full h-56 md:h-64 overflow-visible" viewBox="0 0 900 240" fill="none" xmlns="http://www.w3.org/2000/svg" id="mainSvgChart">
             <defs><linearGradient id="zincAreaGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#71717a" stop-opacity="0.35"/><stop offset="100%" stop-color="#71717a" stop-opacity="0.0"/></linearGradient></defs>
-            <line x1="40" y1="40" x2="880" y2="40" stroke="currentColor" stroke-opacity="0.08" stroke-dasharray="4 4" class="text-zinc-500"/>
-            <line x1="40" y1="90" x2="880" y2="90" stroke="currentColor" stroke-opacity="0.08" stroke-dasharray="4 4" class="text-zinc-500"/>
-            <line x1="40" y1="140" x2="880" y2="140" stroke="currentColor" stroke-opacity="0.08" stroke-dasharray="4 4" class="text-zinc-500"/>
-            <line x1="40" y1="190" x2="880" y2="190" stroke="currentColor" stroke-opacity="0.08" stroke-dasharray="4 4" class="text-zinc-500"/>
-            <text x="30" y="44" font-size="10" font-family="JetBrains Mono" fill="currentColor" opacity="0.4" text-anchor="end" id="yLabel4">10.0k</text>
-            <text x="30" y="94" font-size="10" font-family="JetBrains Mono" fill="currentColor" opacity="0.4" text-anchor="end" id="yLabel3">7.5k</text>
-            <text x="30" y="144" font-size="10" font-family="JetBrains Mono" fill="currentColor" opacity="0.4" text-anchor="end" id="yLabel2">5.0k</text>
-            <text x="30" y="194" font-size="10" font-family="JetBrains Mono" fill="currentColor" opacity="0.4" text-anchor="end" id="yLabel1">0</text>
+            <line x1="40" y1="40" x2="880" y2="40" stroke="currentColor" stroke-opacity="0.08" stroke-dasharray="4 4" class="text-zinc-500"/><line x1="40" y1="90" x2="880" y2="90" stroke="currentColor" stroke-opacity="0.08" stroke-dasharray="4 4" class="text-zinc-500"/><line x1="40" y1="140" x2="880" y2="140" stroke="currentColor" stroke-opacity="0.08" stroke-dasharray="4 4" class="text-zinc-500"/><line x1="40" y1="190" x2="880" y2="190" stroke="currentColor" stroke-opacity="0.08" stroke-dasharray="4 4" class="text-zinc-500"/>
+            <text x="30" y="44" font-size="10" font-family="JetBrains Mono" fill="currentColor" opacity="0.4" text-anchor="end" id="yLabel4">10.0k</text><text x="30" y="94" font-size="10" font-family="JetBrains Mono" fill="currentColor" opacity="0.4" text-anchor="end" id="yLabel3">7.5k</text><text x="30" y="144" font-size="10" font-family="JetBrains Mono" fill="currentColor" opacity="0.4" text-anchor="end" id="yLabel2">5.0k</text><text x="30" y="194" font-size="10" font-family="JetBrains Mono" fill="currentColor" opacity="0.4" text-anchor="end" id="yLabel1">0</text>
             <path id="chartAreaPath" d="M 50 190 L 880 190 Z" fill="url(#zincAreaGradient)"/>
             <path id="chartStrokePath" d="M 50 190 L 880 190" stroke="currentColor" stroke-width="2.5" class="text-zinc-800 dark:text-zinc-200"/>
             <g id="chartMarkers" style="display: none;"></g>
-            <g id="chartXAxisLabels">
-              <text x="50" y="215" font-size="10" font-family="JetBrains Mono" fill="currentColor" opacity="0.4" text-anchor="middle" id="xLabel1">Start</text>
-              <text x="250" y="215" font-size="10" font-family="JetBrains Mono" fill="currentColor" opacity="0.4" text-anchor="middle" id="xLabel2">Batch 25</text>
-              <text x="460" y="215" font-size="10" font-family="JetBrains Mono" fill="currentColor" opacity="0.4" text-anchor="middle" id="xLabel3">Batch 50</text>
-              <text x="680" y="215" font-size="10" font-family="JetBrains Mono" fill="currentColor" opacity="0.4" text-anchor="middle" id="xLabel4">Batch 75</text>
-              <text x="880" y="215" font-size="10" font-family="JetBrains Mono" fill="currentColor" opacity="0.4" text-anchor="middle" id="xLabel5">Batch 100</text>
-            </g>
+            <g id="chartXAxisLabels"><text x="50" y="215" font-size="10" font-family="JetBrains Mono" fill="currentColor" opacity="0.4" text-anchor="middle" id="xLabel1">Start</text><text x="250" y="215" font-size="10" font-family="JetBrains Mono" fill="currentColor" opacity="0.4" text-anchor="middle" id="xLabel2">Batch 25</text><text x="460" y="215" font-size="10" font-family="JetBrains Mono" fill="currentColor" opacity="0.4" text-anchor="middle" id="xLabel3">Batch 50</text><text x="680" y="215" font-size="10" font-family="JetBrains Mono" fill="currentColor" opacity="0.4" text-anchor="middle" id="xLabel4">Batch 75</text><text x="880" y="215" font-size="10" font-family="JetBrains Mono" fill="currentColor" opacity="0.4" text-anchor="middle" id="xLabel5">Batch 100</text></g>
           </svg>
           <div id="chartEmptyBadge" class="absolute inset-0 flex items-center justify-center pointer-events-none ${isZero ? "" : "hidden"}">
             <span class="px-3.5 py-1.5 rounded-lg bg-zinc-900/80 text-zinc-300 border border-zinc-700/60 font-mono text-xs backdrop-blur-sm shadow-md">Stage 0 Baseline: 0 batches ingested &bull; Run Sync to plot live progression</span>
@@ -294,6 +243,32 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
             <span class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-zinc-400"></span>SHA-256 Idempotent Skip</span>
           </div>
           <div class="text-[11px] font-mono text-zinc-400 dark:text-zinc-500" id="chartStateSummary">Extract: ${state.extractedN} &bull; Synced: ${state.syncedS} &bull; Skipped: ${state.skippedO} &bull; DLQ: ${state.dlqPendingE}</div>
+        </div>
+      </section>
+
+      <!-- Upfront Live Pipeline Architecture Health Stepper -->
+      <section class="rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 p-4 shadow-sm" id="pipeline-health-banner">
+        <div class="flex items-center justify-between pb-3 border-b border-zinc-100 dark:border-zinc-800 flex-wrap gap-2">
+          <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span><span class="text-xs font-bold text-zinc-950 dark:text-zinc-50 uppercase tracking-wide">Live Pipeline Health &amp; Architecture Pillars</span><span class="text-[11px] font-mono text-zinc-500" id="livePillarSummary">${state.extractedN} Extracted &bull; ${state.syncedS} Delivered &bull; ${state.skippedO} Unchanged &bull; ${state.dlqPendingE} Held</span></div>
+          <button type="button" onclick="switchToHealthTab()" class="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1">Ver Matriz SLA Detallada &rarr;</button>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
+          <div class="p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30">
+            <div class="flex items-center justify-between text-xs font-medium"><span class="text-zinc-900 dark:text-zinc-100 font-semibold">1. Warehouse</span><span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 font-mono">Live</span></div>
+            <div class="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1 font-mono">DuckDB 10k Mart &bull; $2.50/mo FinOps</div>
+          </div>
+          <div class="p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30">
+            <div class="flex items-center justify-between text-xs font-medium"><span class="text-zinc-900 dark:text-zinc-100 font-semibold">2. Airflow DAG</span><span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 font-mono">&lt;0.05s SLA</span></div>
+            <div class="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1 font-mono">3 Tasks Thin Orchestration</div>
+          </div>
+          <div class="p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30">
+            <div class="flex items-center justify-between text-xs font-medium"><span class="text-zinc-900 dark:text-zinc-100 font-semibold">3. Data Balance</span><span class="text-[10px] px-1.5 py-0.5 rounded ${state.dlqPendingE > 0 ? "bg-amber-500/10 text-amber-600 border border-amber-500/20" : "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20"} font-mono" id="stepperBalanceBadge">Balanced</span></div>
+            <div class="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1 font-mono" id="stepperBalanceText">N(${state.extractedN}) = S(${state.syncedS}) + E(${state.dlqPendingE})</div>
+          </div>
+          <div class="p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30">
+            <div class="flex items-center justify-between text-xs font-medium"><span class="text-zinc-900 dark:text-zinc-100 font-semibold">4. HubSpot CRM</span><span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 font-mono">Synced</span></div>
+            <div class="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1 font-mono">Token Bucket &bull; Full Jitter 429</div>
+          </div>
         </div>
       </section>
 
@@ -328,6 +303,20 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
             </thead>
             <tbody id="contactsBody" class="divide-y divide-zinc-200/60 dark:divide-zinc-800/60">${renderInitialRows(state.contacts, isZero)}</tbody>
           </table>
+        </div>
+
+        <!-- Block Pagination & Down Arrow Block Loader ("flecha abajo para mostrar en bloques") -->
+        <div class="p-3.5 border-t border-zinc-200/80 dark:border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-3 bg-zinc-50/40 dark:bg-zinc-900/20" id="tablePaginationBar">
+          <div class="text-xs text-zinc-600 dark:text-zinc-400 font-mono">
+            Mostrando <span id="pageRangeSpan" class="font-bold text-zinc-900 dark:text-zinc-100">1 - ${isZero ? 0 : Math.min(25, state.totalSyncedContacts)}</span> de <span id="pageTotalSpan" class="font-bold text-zinc-900 dark:text-zinc-100">${state.totalSyncedContacts.toLocaleString("en-US")}</span> registros
+          </div>
+          <div class="flex items-center gap-2">
+            <button type="button" id="btnPrevPage" class="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-40 transition" disabled>&larr; Anterior</button>
+            <button type="button" id="btnNextPage" class="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-40 transition" ${state.totalSyncedContacts <= 25 ? "disabled" : ""}>Siguiente &rarr;</button>
+            <button type="button" id="btnLoadMore" class="px-3 py-1.5 rounded-lg bg-zinc-950 text-white dark:bg-white dark:text-zinc-950 text-xs font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-40 transition flex items-center gap-1.5" ${state.totalSyncedContacts <= 25 ? "disabled" : ""}>
+              <span>Cargar m&aacute;s bloques</span><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+          </div>
         </div>
 
         <!-- Pipeline & Cloud Health View (Tab 4) -->
@@ -378,11 +367,13 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
 
   <script>
     let currentLiveState = JSON.parse("${initialStateJson}");
-    let currentContacts = JSON.parse("${initialContactsJson}");
     let activeTab = "all";
     let activeChartView = "sync";
     let filterQuery = "${escapeHtml(initialFilter)}".toLowerCase();
     let pollingActive = true;
+    let pageOffset = 0;
+    let pageLimit = 25;
+    let searchDebounceTimer = null;
 
     const themeBtn = document.getElementById("themeToggleBtn");
     if (localStorage.getItem("datapulse-theme") === "light") document.documentElement.classList.remove("dark");
@@ -398,7 +389,7 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
       vip: { title: "VIP Accounts at Risk", business: "High-value enterprise accounts whose operating margin dropped below -20.0%, alerting executive leadership to initiate retention strategies before renewal churn.", tech: "Identified via SQL window analytics and rule engine thresholds (customer_tier = 'ENTERPRISE_VIP' AND margin_pct <= -20.0). Auto-generates AI executive briefs stored directly in custom CRM properties." },
       dlq: { title: "Records Held for Review (Data Quarantine)", business: "Corrupted records paused at the boundary to prevent CRM pollution, then repaired automatically by our AI Doctor without requiring human intervention.", tech: "Implements Dead Letter Queue isolation: 150 malformed emails remediated via RFC-5322 regex sanitization, and 50 IEEE-754 NaN margins safely coalesced to 0.0 with audit trail." },
       savings: { title: "Annual Cloud Savings", business: "Direct cost reduction achieved by executing data pipelines in-engine rather than paying third-party SaaS vendors per-row ingestion fees.", tech: "Replaces commercial Reverse ETL vendor ($4,200/yr) with serverless Snowflake XS warehouse execution under FinOps auto-suspend (60s) policies costing $2.50/mo (99.3% reduction)." },
-      flow: { title: "Live Data Sync & Quality Flow", business: "Visual progression tracking healthy customer volume, quarantine events, and automatic repair replay across all pipeline phases.", tech: "Proves mathematical Conservation of Rows: Extracted (N) = Delivered (S) + Unchanged (O) + In Review (E). Live Bezier area curve reflects stage transitions with zero row loss." },
+      flow: { title: "Live Data Sync & Quality Flow", business: "Visual progression tracking healthy customer volume, quarantine events, and automated repair replay across all pipeline phases.", tech: "Proves mathematical Conservation of Rows: Extracted (N) = Delivered (S) + Unchanged (O) + In Review (E). Live Bezier area curve reflects stage transitions with zero row loss." },
       system: { title: "System & Architecture Settings", business: "Configuration parameters governing warehouse connectivity, Airflow DAG cadence, and security credential management.", tech: "Controls DuckDB/Snowflake connection strings, HMAC webhook secrets, token-bucket rate limits, and idempotency cache duration." }
     };
 
@@ -413,8 +404,7 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
       setTimeout(() => { popoverBackdrop.classList.remove("opacity-0"); popoverCard.classList.remove("scale-95"); }, 10);
     }
     function closeInfoPopover() {
-      popoverBackdrop.classList.add("opacity-0");
-      popoverCard.classList.add("scale-95");
+      popoverBackdrop.classList.add("opacity-0"); popoverCard.classList.add("scale-95");
       setTimeout(() => popoverBackdrop.classList.add("hidden"), 150);
     }
     document.getElementById("closeInfoBtn").addEventListener("click", closeInfoPopover);
@@ -446,8 +436,7 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
       drawer.classList.remove("translate-x-full");
     }
     function closeInspector() {
-      drawer.classList.add("translate-x-full");
-      drawerBackdrop.classList.add("opacity-0");
+      drawer.classList.add("translate-x-full"); drawerBackdrop.classList.add("opacity-0");
       setTimeout(() => drawerBackdrop.classList.add("hidden"), 200);
     }
     document.getElementById("closeDrawerBtn").addEventListener("click", closeInspector);
@@ -462,30 +451,19 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
       else { content.classList.add("hidden"); if (chevron) chevron.classList.remove("rotate-180"); }
     }
 
+    function switchToHealthTab() {
+      activeTab = "health";
+      updateTabButtons();
+      const el = document.getElementById("customer-table-section");
+      if (el) el.scrollIntoView({ behavior: "smooth" });
+    }
+
     function navAction(action) {
       const scrollEl = document.getElementById("mainScrollContainer");
-      if (action === "dashboard") {
-        if (scrollEl) scrollEl.scrollTo({ top: 0, behavior: "smooth" });
-      } else if (action === "syncs") {
-        activeTab = "all";
-        updateTabButtons();
-        renderTableRows();
-        const sec = document.getElementById("customer-table-section");
-        if (sec) sec.scrollIntoView({ behavior: "smooth" });
-      } else if (action === "dlq") {
-        toggleDlqAccordion(true);
-        activeTab = "repaired";
-        updateTabButtons();
-        renderTableRows();
-        const sec = document.getElementById("dlq-accordion-card");
-        if (sec) sec.scrollIntoView({ behavior: "smooth" });
-      } else if (action === "budget") {
-        switchChartView("finops");
-        activeTab = "health";
-        updateTabButtons();
-        const card = document.getElementById("area-chart-card");
-        if (card) card.scrollIntoView({ behavior: "smooth" });
-      }
+      if (action === "dashboard") { if (scrollEl) scrollEl.scrollTo({ top: 0, behavior: "smooth" }); }
+      else if (action === "syncs") { activeTab = "all"; updateTabButtons(); const el = document.getElementById("customer-table-section"); if (el) el.scrollIntoView({ behavior: "smooth" }); }
+      else if (action === "dlq") { toggleDlqAccordion(true); const el = document.getElementById("dlq-accordion-card"); if (el) el.scrollIntoView({ behavior: "smooth" }); }
+      else if (action === "budget") { switchChartView("finops"); const el = document.getElementById("area-chart-card"); if (el) el.scrollIntoView({ behavior: "smooth" }); }
     }
 
     function renderDynamicChart(s, view) {
@@ -507,25 +485,18 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
         emptyBadge.classList.remove("hidden");
         return;
       }
-
       emptyBadge.classList.add("hidden");
 
       if (view === "sync") {
         y4.innerText = "10.0k"; y3.innerText = "7.5k"; y2.innerText = "5.0k"; y1.innerText = "0";
         x1.innerText = "Batch 1"; x2.innerText = "Batch 25"; x3.innerText = "Batch 50"; x4.innerText = "Batch 75"; x5.innerText = "Batch 100";
         const batches = s.batchHistory && s.batchHistory.length > 0 ? s.batchHistory : [];
-        let dArea = "";
-        let dStroke = "";
+        let dArea = "", dStroke = "";
         if (batches.length >= 2) {
           const totalBatches = Math.max(batches.length, 100);
-          const pts = batches.map((b) => {
-            const x = 50 + Math.round((b.batchIndex / totalBatches) * 830);
-            const y = 190 - Math.round((b.cumulativeSynced / 10000) * 150);
-            return [x, y];
-          });
+          const pts = batches.map((b) => [50 + Math.round((b.batchIndex / totalBatches) * 830), 190 - Math.round((b.cumulativeSynced / 10000) * 150)]);
           dStroke = "M 50 190 " + pts.map(([x, y]) => "L " + x + " " + y).join(" ");
-          const lastX = pts[pts.length - 1][0];
-          dArea = dStroke + " L " + lastX + " 190 L 50 190 Z";
+          dArea = dStroke + " L " + pts[pts.length - 1][0] + " 190 L 50 190 Z";
         } else {
           const syncRatio = Math.min(1.0, s.totalSyncedContacts / 10000);
           const endX = 50 + Math.round(syncRatio * 830);
@@ -588,11 +559,7 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
     function switchChartView(view) {
       activeChartView = view;
       document.querySelectorAll(".chart-view-btn").forEach((b) => {
-        if (b.getAttribute("data-view") === view) {
-          b.className = "chart-view-btn px-3 py-1 rounded-md font-medium transition bg-zinc-950 text-white dark:bg-white dark:text-zinc-950 shadow-sm";
-        } else {
-          b.className = "chart-view-btn px-3 py-1 rounded-md font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-100 transition";
-        }
+        b.className = b.getAttribute("data-view") === view ? "chart-view-btn px-3 py-1 rounded-md font-medium transition bg-zinc-950 text-white dark:bg-white dark:text-zinc-950 shadow-sm" : "chart-view-btn px-3 py-1 rounded-md font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-100 transition";
       });
       const sub = document.getElementById("chartSubtitle");
       if (view === "sync") sub.innerText = "Real-time Bezier trajectory of customer ingestion, quarantine isolation, and automated repair replay.";
@@ -608,20 +575,18 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
     function updateTabButtons() {
       document.querySelectorAll(".tab-btn").forEach((b) => {
         const t = b.getAttribute("data-tab");
-        if (t === activeTab) {
-          b.className = "tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition bg-zinc-950 text-white dark:bg-white dark:text-zinc-950 shadow-sm inline-flex items-center";
-        } else {
-          b.className = "tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-100 transition inline-flex items-center";
-        }
+        b.className = t === activeTab ? "tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition bg-zinc-950 text-white dark:bg-white dark:text-zinc-950 shadow-sm inline-flex items-center" : "tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-100 transition inline-flex items-center";
       });
       const customersWrapper = document.getElementById("customersTableWrapper");
       const healthWrapper = document.getElementById("healthTableWrapper");
       const filterContainer = document.getElementById("filterContainer");
+      const paginationBar = document.getElementById("tablePaginationBar");
       if (activeTab === "health") {
-        customersWrapper.classList.add("hidden"); healthWrapper.classList.remove("hidden"); filterContainer.classList.add("hidden");
+        customersWrapper.classList.add("hidden"); healthWrapper.classList.remove("hidden"); filterContainer.classList.add("hidden"); if (paginationBar) paginationBar.classList.add("hidden");
       } else {
-        customersWrapper.classList.remove("hidden"); healthWrapper.classList.add("hidden"); filterContainer.classList.remove("hidden");
-        renderTableRows();
+        customersWrapper.classList.remove("hidden"); healthWrapper.classList.add("hidden"); filterContainer.classList.remove("hidden"); if (paginationBar) paginationBar.classList.remove("hidden");
+        pageOffset = 0;
+        loadContacts(false);
       }
     }
 
@@ -632,75 +597,79 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
       });
     });
 
-    document.getElementById("filterInput").addEventListener("input", (e) => {
-      filterQuery = e.target.value.toLowerCase().trim();
-      renderTableRows();
+    const filterInputEl = document.getElementById("filterInput");
+    filterInputEl.addEventListener("input", (e) => {
+      clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = setTimeout(() => {
+        filterQuery = e.target.value.toLowerCase().trim();
+        pageOffset = 0;
+        loadContacts(false);
+      }, 250);
     });
 
-    function renderTableRows() {
+    function formatRowClient(c) {
+      const isVip = Boolean(c.ai_executive_brief) || c.customer_tier.includes("VIP");
+      const isHealed = c.remediated_from_dlq || (c.customer_id >= "CUST-09801");
+      const statusPill = isVip ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20"><span class="w-1.5 h-1.5 rounded-full bg-rose-500 mr-1.5"></span>VIP At Risk</span>' : isHealed ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>Auto-Repaired</span>' : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>Delivered</span>';
+      const briefCell = c.ai_executive_brief ? '<div class="flex items-center gap-1.5"><span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0">[VIP-BRIEF]</span><span class="text-xs text-zinc-700 dark:text-zinc-300 truncate max-w-xs" title="' + escapeHtml(c.ai_executive_brief) + '">' + escapeHtml(c.ai_executive_brief) + '</span></div>' : isHealed ? '<span class="text-xs text-zinc-500 dark:text-zinc-400">Remediated via AI DLQ Doctor (RFC-5322 regex / coalesce)</span>' : '<span class="text-xs text-zinc-400 dark:text-zinc-500">Standard Margin Profile - Normal Rhythm</span>';
+      const marginBadge = c.profit_margin_pct < 0 ? '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">' + c.profit_margin_pct.toFixed(1) + '%</span>' : '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">+' + c.profit_margin_pct.toFixed(1) + '%</span>';
+      const tierBadge = isVip ? '<span class="px-2 py-0.5 rounded text-xs font-medium bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/20">' + escapeHtml(c.customer_tier) + '</span>' : '<span class="px-2 py-0.5 rounded text-xs font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700">' + escapeHtml(c.customer_tier) + '</span>';
+      const safeJson = escapeHtml(JSON.stringify(c));
+      const companyDisplay = escapeHtml(c.company || "Enterprise Account") + ' &bull; ' + escapeHtml(c.country || "US");
+      return '<tr class="customer-row border-b border-zinc-200/80 dark:border-zinc-800 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors cursor-pointer" data-contact="' + safeJson + '" onclick="openInspectorFromRow(this)"><td class="p-3"><input type="checkbox" class="rounded border-zinc-300 dark:border-zinc-700" onclick="event.stopPropagation()"></td><td class="p-3"><div class="font-medium text-xs text-zinc-950 dark:text-zinc-50 font-mono">' + escapeHtml(c.customer_id) + '</div><div class="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono">' + escapeHtml(c.email) + ' &bull; ' + companyDisplay + '</div></td><td class="p-3">' + tierBadge + '</td><td class="p-3">' + statusPill + '</td><td class="p-3 font-mono text-xs font-semibold text-zinc-950 dark:text-zinc-50">$' + c.net_profitability_usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</td><td class="p-3">' + marginBadge + '</td><td class="p-3">' + briefCell + '</td><td class="p-3 text-right"><button type="button" class="btn-inspect px-2.5 py-1 rounded text-xs font-medium border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition" onclick="event.stopPropagation(); openInspectorFromRow(this.closest(\'tr\'))">Inspect</button></td></tr>';
+    }
+
+    async function loadContacts(append = false) {
       const tbody = document.getElementById("contactsBody");
       if (!tbody) return;
       const isZero = currentLiveState.totalSyncedContacts === 0 && currentLiveState.extractedN === 0;
-
-      if (isZero || currentContacts.length === 0) {
+      if (isZero) {
         tbody.innerHTML = '<tr><td colspan="8" class="p-12 text-center text-xs text-zinc-500 font-mono">Stage 0 Baseline: 0 Contacts in CRM. Ingestion pipeline is idle. Click "1. Run Sync" above to stream batches...</td></tr>';
+        updatePaginationUi(0, 0, 0, false);
         return;
       }
-
-      const filtered = currentContacts.filter((c) => {
-        if (activeTab === "vip") {
-          if (!Boolean(c.ai_executive_brief) && !c.customer_tier.includes("VIP")) return false;
-        } else if (activeTab === "repaired") {
-          if (!c.remediated_from_dlq && !(c.customer_id >= "CUST-09801")) return false;
+      try {
+        const url = "/api/v1/contacts?q=" + encodeURIComponent(filterQuery) + "&tab=" + encodeURIComponent(activeTab) + "&offset=" + pageOffset + "&limit=" + pageLimit;
+        const resp = await fetch(url);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const rowsHtml = (data.contacts || []).map(formatRowClient).join("\n");
+        if (data.total === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-xs text-zinc-500 font-mono">No matching records found in CRM store for query "' + escapeHtml(filterQuery) + '".</td></tr>';
+          updatePaginationUi(0, 0, 0, false);
+          return;
         }
-        if (!filterQuery) return true;
-        const text = (c.customer_id + " " + c.email + " " + (c.company || "") + " " + (c.customer_tier || "")).toLowerCase();
-        return text.includes(filterQuery);
-      });
-
-      if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-xs text-zinc-500 font-mono">No records match the current filter criteria.</td></tr>';
-        return;
+        if (append) tbody.innerHTML += rowsHtml;
+        else tbody.innerHTML = rowsHtml;
+        updatePaginationUi(data.total, pageOffset, data.contacts.length, append);
+      } catch (err) {
+        console.error("Load contacts error:", err);
       }
-
-      tbody.innerHTML = filtered.map((c) => {
-        const isVip = Boolean(c.ai_executive_brief) || c.customer_tier.includes("VIP");
-        const isHealed = c.remediated_from_dlq || (c.customer_id >= "CUST-09801");
-        const statusPill = isVip
-          ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20"><span class="w-1.5 h-1.5 rounded-full bg-rose-500 mr-1.5"></span>VIP At Risk</span>'
-          : isHealed
-            ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>Auto-Repaired</span>'
-            : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>Delivered</span>';
-
-        const briefCell = c.ai_executive_brief
-          ? '<div class="flex items-center gap-1.5"><span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0">[VIP-BRIEF]</span><span class="text-xs text-zinc-700 dark:text-zinc-300 truncate max-w-xs" title="' + escapeHtml(c.ai_executive_brief) + '">' + escapeHtml(c.ai_executive_brief) + '</span></div>'
-          : isHealed
-            ? '<span class="text-xs text-zinc-500 dark:text-zinc-400">Remediated via AI DLQ Doctor (RFC-5322 regex / coalesce)</span>'
-            : '<span class="text-xs text-zinc-400 dark:text-zinc-500">Standard Margin Profile - Normal Rhythm</span>';
-
-        const marginBadge = c.profit_margin_pct < 0
-          ? '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">' + c.profit_margin_pct.toFixed(1) + '%</span>'
-          : '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">+' + c.profit_margin_pct.toFixed(1) + '%</span>';
-
-        const tierBadge = isVip
-          ? '<span class="px-2 py-0.5 rounded text-xs font-medium bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/20">' + escapeHtml(c.customer_tier) + '</span>'
-          : '<span class="px-2 py-0.5 rounded text-xs font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700">' + escapeHtml(c.customer_tier) + '</span>';
-
-        const safeJson = escapeHtml(JSON.stringify(c));
-        const companyDisplay = escapeHtml(c.company || "Enterprise Account") + ' &bull; ' + escapeHtml(c.country || "US");
-
-        return '<tr class="customer-row border-b border-zinc-200/80 dark:border-zinc-800 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors cursor-pointer" data-contact="' + safeJson + '" onclick="openInspectorFromRow(this)">' +
-          '<td class="p-3"><input type="checkbox" class="rounded border-zinc-300 dark:border-zinc-700" onclick="event.stopPropagation()"></td>' +
-          '<td class="p-3"><div class="font-medium text-xs text-zinc-950 dark:text-zinc-50 font-mono">' + escapeHtml(c.customer_id) + '</div><div class="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono">' + escapeHtml(c.email) + ' &bull; ' + companyDisplay + '</div></td>' +
-          '<td class="p-3">' + tierBadge + '</td>' +
-          '<td class="p-3">' + statusPill + '</td>' +
-          '<td class="p-3 font-mono text-xs font-semibold text-zinc-950 dark:text-zinc-50">$' + c.net_profitability_usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</td>' +
-          '<td class="p-3">' + marginBadge + '</td>' +
-          '<td class="p-3">' + briefCell + '</td>' +
-          '<td class="p-3 text-right"><button type="button" class="btn-inspect px-2.5 py-1 rounded text-xs font-medium border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition" onclick="event.stopPropagation(); openInspectorFromRow(this.closest(\'tr\'))">Inspect</button></td>' +
-        '</tr>';
-      }).join("\n");
     }
+
+    function updatePaginationUi(total, offset, count, append) {
+      const rangeEl = document.getElementById("pageRangeSpan");
+      const totalEl = document.getElementById("pageTotalSpan");
+      const prevBtn = document.getElementById("btnPrevPage");
+      const nextBtn = document.getElementById("btnNextPage");
+      const moreBtn = document.getElementById("btnLoadMore");
+      if (totalEl) totalEl.innerText = total.toLocaleString("en-US");
+      if (rangeEl) {
+        if (total === 0) rangeEl.innerText = "0 - 0";
+        else {
+          const start = append ? 1 : offset + 1;
+          const end = append ? Math.min(offset + count, total) : Math.min(offset + pageLimit, total);
+          rangeEl.innerText = start + " - " + end;
+        }
+      }
+      if (prevBtn) prevBtn.disabled = offset <= 0;
+      if (nextBtn) nextBtn.disabled = offset + pageLimit >= total;
+      if (moreBtn) moreBtn.disabled = (append ? offset + count : offset + pageLimit) >= total;
+    }
+
+    document.getElementById("btnPrevPage").addEventListener("click", () => { pageOffset = Math.max(0, pageOffset - pageLimit); loadContacts(false); });
+    document.getElementById("btnNextPage").addEventListener("click", () => { pageOffset += pageLimit; loadContacts(false); });
+    document.getElementById("btnLoadMore").addEventListener("click", () => { pageOffset += pageLimit; loadContacts(true); });
 
     function openInspectorFromRow(row) {
       try { openInspector(JSON.parse(row.getAttribute("data-contact"))); } catch (e) { console.error(e); }
@@ -708,12 +677,6 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
 
     function applyStateToDom(s) {
       currentLiveState = s;
-      if (s.contacts && Array.isArray(s.contacts) && s.contacts.length > 0) {
-        currentContacts = s.contacts;
-      } else if (s.totalSyncedContacts === 0) {
-        currentContacts = [];
-      }
-
       const isZero = s.totalSyncedContacts === 0 && s.extractedN === 0;
 
       document.getElementById("kpi-synced").innerText = s.totalSyncedContacts.toLocaleString("en-US");
@@ -754,14 +717,16 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
 
       const p3 = document.getElementById("pillar3BalanceText");
       if (p3) p3.innerHTML = "Data Delivery Balance: " + s.extractedN + " Extracted = " + s.syncedS + " Delivered + " + s.skippedO + " Unchanged + " + s.dlqPendingE + " Held";
+      const stepSummary = document.getElementById("livePillarSummary");
+      if (stepSummary) stepSummary.innerHTML = s.extractedN + " Extracted &bull; " + s.syncedS + " Delivered &bull; " + s.skippedO + " Unchanged &bull; " + s.dlqPendingE + " Held";
+      const stepBalText = document.getElementById("stepperBalanceText");
+      if (stepBalText) stepBalText.innerText = "N(" + s.extractedN + ") = S(" + s.syncedS + ") + E(" + s.dlqPendingE + ")";
 
       const summary = document.getElementById("chartStateSummary");
-      if (summary) {
-        summary.innerHTML = "Extract: " + s.extractedN + " &bull; Synced: " + s.syncedS + " &bull; Skipped: " + s.skippedO + " &bull; DLQ: " + s.dlqPendingE;
-      }
+      if (summary) summary.innerHTML = "Extract: " + s.extractedN + " &bull; Synced: " + s.syncedS + " &bull; Skipped: " + s.skippedO + " &bull; DLQ: " + s.dlqPendingE;
 
       renderDynamicChart(s, activeChartView);
-      renderTableRows();
+      if (activeTab !== "health") loadContacts(false);
     }
 
     async function triggerPipelinePhase(phase) {

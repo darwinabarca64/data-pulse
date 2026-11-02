@@ -234,5 +234,11 @@ it("enforces Honest Zero Baseline when state is 0", () => {
 
     expect(state.segmentBreakdown.ENTERPRISE_VIP.annual_revenue).toBe(120000);
     expect(state.segmentBreakdown.ENTERPRISE.annual_revenue).toBe(80000);
+
+    const qRes = store.queryContacts({ q: 'MegaCorp', tab: 'all', offset: 0, limit: 10 });
+    expect(qRes.total).toBe(1);
+    expect(qRes.contacts[0]?.customer_id).toBe('CUST-00001');
+    expect(store.queryContacts({ tab: 'vip' }).total).toBe(1);
+    expect(store.queryContacts({ tab: 'repaired' }).total).toBe(1);
   });
 });
