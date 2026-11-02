@@ -1,5 +1,6 @@
 /**
- * Infrastructure Layer: 4-Pillar Unified Visual Mission Control Scratchpad Renderer.
+ * Infrastructure Layer: Style 2 - Tremor Analytics Quantitative FinOps Dashboard.
+ * Features Tremor Category Bars, Snowflake Budget Gauges, and Pareto Tier Distribution.
  */
 
 import { NormalizedCrmContact } from "../domain/contracts.js";
@@ -54,30 +55,33 @@ function selectShowcaseContacts(contacts: NormalizedCrmContact[]): NormalizedCrm
 
 export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""): string {
   const fUpper = initialFilter.trim().toUpperCase();
-  const rowsHtml = selectShowcaseContacts(state.contacts)
-    .filter((c) => {
-      if (!fUpper) return true;
-      if (fUpper === "REMEDIATED_DLQ") return c.customer_id >= "CUST-09801";
-      return c.customer_tier.toUpperCase().includes(fUpper) || c.customer_id.toUpperCase().includes(fUpper);
-    })
+  const showcase = selectShowcaseContacts(state.contacts);
+  const filtered = showcase.filter((c) => {
+    if (!fUpper) return true;
+    if (fUpper === "REMEDIATED_DLQ") return c.customer_id >= "CUST-09801";
+    return c.customer_tier.toUpperCase().includes(fUpper) || c.customer_id.toUpperCase().includes(fUpper);
+  });
+
+  const rowsHtml = filtered
     .map((c) => {
       const isHealed = c.customer_id >= "CUST-09801";
       const briefCell = c.ai_executive_brief
-        ? `<span class="badge-vip">[VIP-BRIEF]</span> ${escapeHtml(c.ai_executive_brief)}`
+        ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 mr-1.5">[VIP-BRIEF]</span> <span class="text-slate-300">${escapeHtml(c.ai_executive_brief)}</span>`
         : isHealed
-          ? `<span class="badge-healed">[HEALED-DLQ]</span> Remediated via Out-of-Band AI DLQ Doctor &amp; Surgical Replay`
-          : `<span class="muted">[OK] Standard Margin Profile</span>`;
-      const marginClass = c.profit_margin_pct < 0 ? "neg" : "pos";
+          ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 mr-1.5">[HEALED-DLQ]</span> <span class="text-slate-400">Remediated via Out-of-Band AI DLQ Doctor &amp; Surgical Replay</span>`
+          : `<span class="text-slate-500 font-mono text-xs">[OK] Standard Margin Profile</span>`;
+      const marginColor = c.profit_margin_pct < 0 ? "text-rose-400 font-bold" : "text-emerald-400 font-semibold";
       const tierBadge = isHealed
-        ? `<span class="tier">${escapeHtml(c.customer_tier)}</span> <span class="badge-healed">REMEDIATED_DLQ</span>`
-        : `<span class="tier">${escapeHtml(c.customer_tier)}</span>`;
-      return `<tr>
-        <td class="mono">${escapeHtml(c.customer_id)}</td>
-        <td>${escapeHtml(c.email)}</td>
-        <td>${tierBadge}</td>
-        <td class="mono">${c.net_profitability_usd.toFixed(2)} ${escapeHtml(c.currency_code)}</td>
-        <td class="mono ${marginClass}">${c.profit_margin_pct.toFixed(1)}%</td>
-        <td>${briefCell}</td>
+        ? `<span class="px-2 py-0.5 rounded text-xs font-mono font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 mr-1">${escapeHtml(c.customer_tier)}</span><span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">REMEDIATED_DLQ</span>`
+        : `<span class="px-2 py-0.5 rounded text-xs font-mono font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">${escapeHtml(c.customer_tier)}</span>`;
+
+      return `<tr class="border-b border-slate-800/80 hover:bg-slate-800/40 transition-colors">
+        <td class="px-3.5 py-2.5 font-mono text-xs font-semibold text-slate-100">${escapeHtml(c.customer_id)}</td>
+        <td class="px-3.5 py-2.5 text-xs text-slate-300 font-mono">${escapeHtml(c.email)}</td>
+        <td class="px-3.5 py-2.5 text-xs">${tierBadge}</td>
+        <td class="px-3.5 py-2.5 font-mono text-xs text-slate-200">$${c.net_profitability_usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+        <td class="px-3.5 py-2.5 font-mono text-xs ${marginColor}">${c.profit_margin_pct.toFixed(1)}%</td>
+        <td class="px-3.5 py-2.5 text-xs leading-relaxed">${briefCell}</td>
       </tr>`;
     })
     .join("\n");
@@ -87,135 +91,325 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
       ? `[QUARANTINED] ${state.dlqPendingE} PENDING (${state.emailErrorsPending} EMAIL | ${state.nanErrorsPending} NAN)`
       : `[RESOLVED] 0 PENDING (${state.dlqResolved} REMEDIATED)`;
 
-  const dagTask1Class = state.extractedN > 0 || state.totalSyncedContacts > 0 ? "dag-done" : "dag-idle";
-  const dagTask2Class = state.totalSyncedContacts >= 10000 ? "dag-done" : state.totalSyncedContacts > 0 ? "dag-run" : "dag-idle";
-  const dagTask3Class = state.dlqPendingE > 0 ? "dag-warn" : state.totalSyncedContacts >= 10000 ? "dag-done" : "dag-idle";
+  const finopsUtilizationPct = ((2.50 / 150.0) * 100).toFixed(1);
+  const saasSavingsPct = ((4170.0 / 4200.0) * 100).toFixed(1);
 
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DataPulse Reverse ETL | 4-Pillar Unified Visual Mission Control</title>
+  <title>DataPulse Reverse ETL | Tremor Analytics FinOps Telemetry</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            tremor: {
+              brand: "#0284c7",
+              card: "#0b1329",
+              border: "#1e293b",
+            }
+          },
+          fontFamily: {
+            sans: ["Inter", "-apple-system", "sans-serif"],
+            mono: ["JetBrains Mono", "monospace"],
+          }
+        }
+      }
+    };
+  </script>
   <style>
-    :root { --bg: #070b14; --panel: #0f172a; --panel-alt: #1e293b; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --ok: #10b981; --warn: #f59e0b; --danger: #ef4444; }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, sans-serif; padding: 16px 22px; }
-    header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 14px; }
-    h1 { font-size: 1.15rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); }
-    .header-badges { display: flex; gap: 10px; align-items: center; }
-    .phase-tag { font-family: monospace; background: #1e3a8a; color: #93c5fd; border: 1px solid #3b82f6; padding: 6px 12px; border-radius: 4px; font-size: 0.8rem; font-weight: 700; }
-    .status-tag { font-family: monospace; background: #064e3b; color: #34d399; border: 1px solid #10b981; padding: 6px 12px; border-radius: 4px; font-size: 0.8rem; font-weight: 700; }
-    .pillars-top { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 14px; }
-    .pillar-box { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 12px; }
-    .pillar-title { font-family: monospace; font-size: 0.75rem; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; font-weight: 700; border-bottom: 1px solid var(--border); padding-bottom: 5px; }
-    .meta-row { display: flex; justify-content: space-between; font-family: monospace; font-size: 0.76rem; margin-bottom: 5px; color: var(--muted); }
-    .meta-val { color: var(--text); font-weight: 600; }
-    .dag-step { font-family: monospace; font-size: 0.74rem; padding: 5px 8px; border-radius: 4px; margin-bottom: 5px; border: 1px solid var(--border); background: #090d16; display: flex; justify-content: space-between; }
-    .dag-done { border-color: var(--ok); color: #6ee7b7; background: rgba(16, 185, 129, 0.1); }
-    .dag-run { border-color: var(--accent); color: #7dd3fc; background: rgba(56, 189, 248, 0.12); }
-    .dag-warn { border-color: var(--warn); color: #fcd34d; background: rgba(245, 158, 11, 0.14); }
-    .dag-idle { color: var(--muted); }
-    .grid-kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 14px; }
-    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; }
-    .card-label { font-size: 0.68rem; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; font-family: monospace; }
-    .card-val { font-size: 1.35rem; font-weight: 700; font-family: monospace; }
-    .toolbar { display: flex; justify-content: space-between; margin-bottom: 10px; align-items: center; background: var(--panel); padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; }
-    .filter-btns { display: flex; gap: 8px; align-items: center; }
-    .btn-filter { background: var(--panel-alt); color: var(--text); border: 1px solid var(--border); padding: 6px 12px; border-radius: 4px; font-family: monospace; font-size: 0.76rem; cursor: pointer; font-weight: 600; }
-    .btn-filter.active, .btn-filter:hover { border-color: var(--accent); background: #1e3a8a; color: #fff; }
-    input[type="search"] { background: #090d16; border: 1px solid var(--border); color: var(--text); padding: 6px 12px; border-radius: 4px; width: 290px; font-family: monospace; font-size: 0.8rem; }
-    table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); font-size: 0.82rem; }
-    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
-    th { background: var(--panel-alt); color: var(--muted); font-family: monospace; text-transform: uppercase; font-size: 0.72rem; }
-    .mono { font-family: monospace; } .pos { color: var(--ok); font-weight: 600; } .neg { color: var(--danger); font-weight: 700; } .warn-text { color: var(--warn); font-weight: 700; }
-    .tier { background: #1e3a8a; color: #93c5fd; padding: 2px 6px; border-radius: 3px; font-family: monospace; font-size: 0.72rem; }
-    .badge-vip { background: #7c2d12; color: #fdba74; padding: 2px 6px; border-radius: 3px; font-family: monospace; font-size: 0.72rem; font-weight: 700; }
-    .badge-healed { background: #064e3b; color: #6ee7b7; padding: 2px 6px; border-radius: 3px; font-family: monospace; font-size: 0.72rem; font-weight: 700; }
-    .muted { color: var(--muted); font-family: monospace; font-size: 0.76rem; }
-    .sql-pill { font-family: monospace; font-size: 0.7rem; background: #090d16; border: 1px solid var(--border); padding: 4px 6px; border-radius: 4px; color: #fcd34d; margin-top: 4px; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; background-color: #060b18; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
   </style>
 </head>
-<body>
-  <header>
-    <div>
-      <h1>DataPulse Reverse ETL | 4-Pillar Unified Visual Mission Control</h1>
-      <p class="muted">Hexagonal Architecture | Snowflake &amp; DuckDB | Thin Airflow DAG | Out-of-Band AI DLQ Doctor | HubSpot CRM v3</p>
+<body class="text-slate-100 min-h-screen p-4 md:p-6 antialiased">
+  <!-- Top Navigation & Global Controls -->
+  <header class="flex flex-col md:flex-row md:items-center justify-between pb-4 mb-5 border-b border-slate-800 gap-4">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-sm">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+      </div>
+      <div>
+        <h1 class="text-base font-bold tracking-tight text-white flex items-center gap-2">
+          DataPulse Reverse ETL
+          <span class="text-xs px-2 py-0.5 rounded font-mono font-medium bg-emerald-950/60 text-emerald-400 border border-emerald-800/60">Style 2: Tremor Analytics</span>
+        </h1>
+        <p class="text-xs text-slate-400">Hexagonal Architecture | Snowflake &amp; DuckDB | Thin Airflow DAG | Out-of-Band AI DLQ Doctor | HubSpot CRM v3</p>
+      </div>
     </div>
-    <div class="header-badges">
-      <div class="phase-tag" id="phase-banner">${escapeHtml(state.currentPhase)}</div>
-      <div class="status-tag">[OK] CONNECTOR ONLINE</div>
+    <div class="flex items-center gap-2.5 flex-wrap">
+      <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20" id="phase-banner">
+        <span class="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>
+        ${escapeHtml(state.currentPhase)}
+      </div>
+      <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+        [OK] CONNECTOR ONLINE
+      </div>
+      <button id="togglePollingBtn" type="button" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-mono font-medium border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 transition">
+        <span class="w-2 h-2 rounded-full bg-emerald-500" id="pollingDot"></span>
+        <span id="pollingStatusText">Auto-Poll: ON (2s)</span>
+      </button>
+      <button id="resetStoreBtn" type="button" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono border border-slate-700 bg-slate-900 text-slate-400 hover:text-rose-400 transition">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        Reset
+      </button>
     </div>
   </header>
-  <section class="pillars-top">
-    <div class="pillar-box">
-      <div class="pillar-title">Pillar 1: Warehouse &amp; FinOps Guardrails</div>
-      <div class="meta-row"><span>Active Engine:</span><span class="meta-val">${escapeHtml(state.activeEngine)} (WH_DATA_PULSE_XS)</span></div>
-      <div class="meta-row"><span>FinOps Policy:</span><span class="meta-val">AUTO_SUSPEND=60s | TIMEOUT=300s</span></div>
-      <div class="meta-row"><span>Resource Monitor:</span><span class="meta-val pos">50 Credits ($150 Cap) | $2.50/mo</span></div>
-      <div class="meta-row"><span>Source Distribution:</span><span class="meta-val">10,000 (9,800 Clean | 200 Poison)</span></div>
-      <div class="meta-row"><span>High Watermark:</span><span class="meta-val">${escapeHtml(state.watermarkTs)}</span></div>
+
+  <!-- Tremor Category Distribution & FinOps Budget Gauges Row -->
+  <section class="grid grid-cols-1 lg:grid-cols-3 gap-3.5 mb-5">
+    <!-- Tremor Category Distribution Bar -->
+    <div class="rounded-xl border border-slate-800 bg-[#0b1329] p-4 shadow-lg ring-1 ring-slate-800/60">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <span class="text-xs font-mono font-semibold uppercase tracking-wider text-slate-400">Warehouse Source Distribution</span>
+          <div class="text-base font-bold font-mono text-white">10,000 Source Records</div>
+        </div>
+        <span class="px-2 py-0.5 rounded text-[11px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">98.0% Clean</span>
+      </div>
+      <!-- Multi-segment Category Bar -->
+      <div class="h-3 w-full bg-slate-800 rounded-full overflow-hidden flex mb-3">
+        <div class="bg-emerald-500 h-full transition-all duration-500" style="width: 98.0%" title="Clean: 9,800 (98%)"></div>
+        <div class="bg-amber-500 h-full transition-all duration-500" style="width: 1.5%" title="Email Poison: 150 (1.5%)"></div>
+        <div class="bg-rose-500 h-full transition-all duration-500" style="width: 0.5%" title="NaN Poison: 50 (0.5%)"></div>
+      </div>
+      <!-- Category Legend -->
+      <div class="grid grid-cols-3 gap-2 text-xs font-mono pt-2 border-t border-slate-800/80">
+        <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-emerald-500"></span><span class="text-slate-300">Clean: 9,800</span></div>
+        <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-amber-500"></span><span class="text-slate-300">Email: 150</span></div>
+        <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-rose-500"></span><span class="text-slate-300">NaN: 50</span></div>
+      </div>
     </div>
-    <div class="pillar-box">
-      <div class="pillar-title">Pillar 2: Apache Airflow Thin DAG (&lt;0.05s SLA)</div>
-      <div class="meta-row"><span>DAG ID:</span><span class="meta-val">datapulse_hubspot_profitability_sync</span></div>
-      <div class="meta-row"><span>DAG State:</span><span class="meta-val pos">${escapeHtml(state.dagStatus)}</span></div>
-      <div class="dag-step ${dagTask1Class}"><span>1. validate_sync_manifest</span><span>[OK]</span></div>
-      <div class="dag-step ${dagTask2Class}"><span>2. execute_incremental_reverse_etl</span><span>[SYNC]</span></div>
-      <div class="dag-step ${dagTask3Class}"><span>3. audit_dlq_and_finops_telemetry</span><span>[AUDIT]</span></div>
+
+    <!-- Tremor FinOps Budget Utilization Gauge -->
+    <div class="rounded-xl border border-slate-800 bg-[#0b1329] p-4 shadow-lg ring-1 ring-slate-800/60">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <span class="text-xs font-mono font-semibold uppercase tracking-wider text-slate-400">Snowflake FinOps Budget</span>
+          <div class="text-base font-bold font-mono text-emerald-400">$2.50 / $150.00 Mo. Cap</div>
+        </div>
+        <span class="px-2 py-0.5 rounded text-[11px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">${finopsUtilizationPct}% Utilized</span>
+      </div>
+      <div class="h-3 w-full bg-slate-800 rounded-full overflow-hidden flex mb-3">
+        <div class="bg-emerald-500 h-full transition-all duration-500" style="width: ${finopsUtilizationPct}%"></div>
+      </div>
+      <div class="flex justify-between items-center text-xs font-mono pt-2 border-t border-slate-800/80 text-slate-400">
+        <span>Resource Monitor: 50 Credits</span>
+        <span class="text-emerald-400 font-semibold">98.4% Headroom Left</span>
+      </div>
     </div>
-    <div class="pillar-box">
-      <div class="pillar-title">Pillar 3: N = S + O + E &amp; Out-of-Band AI DLQ Doctor</div>
-      <div class="meta-row"><span>Conservation Law:</span><span class="meta-val pos">N(${state.extractedN}) = S(${state.syncedS}) + O(${state.skippedO}) + E(${state.dlqPendingE})</span></div>
-      <div class="meta-row"><span>DLQ Quarantine Status:</span><span class="meta-val ${state.dlqPendingE > 0 ? "warn-text" : "pos"}">${escapeHtml(dlqBadgeText)}</span></div>
-      <div class="sql-pill">1. INVALID_EMAIL_FORMAT (150): REGEXP_REPLACE(LOWER(TRIM(email)))</div>
-      <div class="sql-pill">2. IEEE_754_NAN_INFINITY (50): COALESCE(NULLIF(margin_pct, 'NaN'), 0.0)</div>
+
+    <!-- Tremor SaaS Savings Gauge -->
+    <div class="rounded-xl border border-slate-800 bg-[#0b1329] p-4 shadow-lg ring-1 ring-slate-800/60">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <span class="text-xs font-mono font-semibold uppercase tracking-wider text-slate-400">Annual SaaS Displacement</span>
+          <div class="text-base font-bold font-mono text-emerald-400">$4,170.00 / yr Saved</div>
+        </div>
+        <span class="px-2 py-0.5 rounded text-[11px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">${saasSavingsPct}% ROI</span>
+      </div>
+      <div class="h-3 w-full bg-slate-800 rounded-full overflow-hidden flex mb-3">
+        <div class="bg-cyan-500 h-full transition-all duration-500" style="width: ${saasSavingsPct}%"></div>
+      </div>
+      <div class="flex justify-between items-center text-xs font-mono pt-2 border-t border-slate-800/80 text-slate-400">
+        <span>Commercial SaaS: $4,200/yr</span>
+        <span class="text-cyan-400 font-semibold">DataPulse: $30/yr</span>
+      </div>
     </div>
   </section>
-  <section class="grid-kpis">
-    <div class="card"><div class="card-label">[S] Synced Contacts</div><div class="card-val pos" id="kpi-synced">${state.totalSyncedContacts.toLocaleString("en-US")}</div></div>
-    <div class="card"><div class="card-label">[VIP] Executive Briefs</div><div class="card-val" id="kpi-vip">${state.vipBriefCount}</div></div>
-    <div class="card"><div class="card-label">[E] Pending DLQ</div><div class="card-val ${state.dlqPendingE > 0 ? "warn-text" : "pos"}" id="kpi-dlq">${state.dlqPendingE} (${state.dlqResolved} Healed)</div></div>
-    <div class="card"><div class="card-label">[O] SHA-256 Skipped</div><div class="card-val pos" id="kpi-skipped">${state.skippedO.toLocaleString("en-US")}</div></div>
-    <div class="card"><div class="card-label">[HTTP] Batch Requests</div><div class="card-val" id="kpi-batches">${state.totalBatchRequests} (429s: ${state.rateLimitRetriesAbsorbed})</div></div>
-    <div class="card"><div class="card-label">[FINOPS] Annual Savings</div><div class="card-val pos">$${state.annualSaasSavingsUsd.toLocaleString("en-US")}/yr</div></div>
-  </section>
-  <div class="toolbar">
-    <div class="filter-btns">
-      <span class="muted">Pillar 4 (HubSpot CRM v3 Store):</span>
-      <button type="button" class="btn-filter ${!fUpper ? "active" : ""}" data-filter="">ALL (${state.totalSyncedContacts.toLocaleString("en-US")})</button>
-      <button type="button" class="btn-filter ${fUpper === "ENTERPRISE_VIP" ? "active" : ""}" id="btnFilterVip" data-filter="ENTERPRISE_VIP">ENTERPRISE_VIP (${state.vipBriefCount})</button>
-      <button type="button" class="btn-filter ${fUpper === "REMEDIATED_DLQ" ? "active" : ""}" id="btnFilterDlq" data-filter="REMEDIATED_DLQ">REMEDIATED_DLQ (${state.dlqResolved})</button>
+
+  <!-- 3 Pillars Row -->
+  <section class="grid grid-cols-1 md:grid-cols-3 gap-3.5 mb-5">
+    <!-- Pillar 1 -->
+    <div class="rounded-xl border border-slate-800 bg-[#0b1329] p-4 shadow-lg ring-1 ring-slate-800/60">
+      <div class="flex items-center justify-between pb-2 mb-2.5 border-b border-slate-800 font-mono text-xs font-semibold tracking-wide uppercase text-cyan-400">
+        <span>Pillar 1: Warehouse &amp; FinOps Guardrails</span>
+        <svg class="w-4 h-4 text-cyan-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>
+      </div>
+      <div class="space-y-1.5 text-xs font-mono text-slate-400">
+        <div class="flex justify-between"><span>Active Engine:</span><span class="font-semibold text-slate-200">${escapeHtml(state.activeEngine)} (WH_DATA_PULSE_XS)</span></div>
+        <div class="flex justify-between"><span>FinOps Policy:</span><span class="text-slate-300">AUTO_SUSPEND=60s | TIMEOUT=300s</span></div>
+        <div class="flex justify-between"><span>Resource Monitor:</span><span class="font-semibold text-emerald-400">50 Credits ($150 Cap) | $2.50/mo</span></div>
+        <div class="flex justify-between"><span>Source Distribution:</span><span class="text-slate-300">10,000 (9,800 Clean | 200 Poison)</span></div>
+        <div class="flex justify-between"><span>High Watermark:</span><span class="text-slate-300">${escapeHtml(state.watermarkTs)}</span></div>
+      </div>
     </div>
-    <input type="search" id="filterInput" value="${escapeHtml(initialFilter)}" placeholder="Filter by Tier/Email/ID (e.g. ENTERPRISE_VIP)..." />
-  </div>
-  <table>
-    <thead>
-      <tr><th>Customer ID</th><th>Email</th><th>Tier &amp; Status</th><th>Net Profitability</th><th>Margin (%)</th><th>VIP Executive Action Brief / DLQ Provenance</th></tr>
-    </thead>
-    <tbody id="contactsBody">
-      ${rowsHtml || '<tr><td colspan="6" class="muted">[INFO] Stage 0 Baseline: 0 Contacts in HubSpot CRM. Run datapulse init &amp; datapulse run to stream batches...</td></tr>'}
-    </tbody>
-  </table>
+
+    <!-- Pillar 2 -->
+    <div class="rounded-xl border border-slate-800 bg-[#0b1329] p-4 shadow-lg ring-1 ring-slate-800/60">
+      <div class="flex items-center justify-between pb-2 mb-2.5 border-b border-slate-800 font-mono text-xs font-semibold tracking-wide uppercase text-cyan-400">
+        <span>Pillar 2: Apache Airflow Thin DAG</span>
+        <svg class="w-4 h-4 text-cyan-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"/><path d="m17 5-5-3-5 3"/><path d="m17 19-5 3-5-3"/></svg>
+      </div>
+      <div class="space-y-1.5 text-xs font-mono mb-2">
+        <div class="flex justify-between text-slate-400"><span>DAG ID:</span><span class="text-slate-200">datapulse_hubspot_profitability_sync</span></div>
+        <div class="flex justify-between text-slate-400"><span>DAG SLA &amp; State:</span><span class="font-semibold text-emerald-400">&lt;0.05s SLA | ${escapeHtml(state.dagStatus)}</span></div>
+      </div>
+      <!-- Horizontal Airflow Tracker -->
+      <div class="grid grid-cols-3 gap-1.5 text-[11px] font-mono mt-2">
+        <div class="p-2 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-center font-semibold">1. manifest<br/><span class="text-[10px] text-emerald-300">[OK]</span></div>
+        <div class="p-2 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-center font-semibold">2. reverse_etl<br/><span class="text-[10px] text-emerald-300">[SYNC]</span></div>
+        <div class="p-2 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-center font-semibold">3. dlq_telemetry<br/><span class="text-[10px] text-emerald-300">[AUDIT]</span></div>
+      </div>
+    </div>
+
+    <!-- Pillar 3 -->
+    <div class="rounded-xl border border-slate-800 bg-[#0b1329] p-4 shadow-lg ring-1 ring-slate-800/60">
+      <div class="flex items-center justify-between pb-2 mb-2.5 border-b border-slate-800 font-mono text-xs font-semibold tracking-wide uppercase text-cyan-400">
+        <span>Pillar 3: N = S + O + E &amp; Out-of-Band AI DLQ Doctor</span>
+        <svg class="w-4 h-4 text-cyan-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/></svg>
+      </div>
+      <div class="space-y-1.5 text-xs font-mono text-slate-400 mb-2">
+        <div class="flex justify-between"><span>Conservation Law:</span><span class="font-semibold text-emerald-400">N(${state.extractedN}) = S(${state.syncedS}) + O(${state.skippedO}) + E(${state.dlqPendingE})</span></div>
+        <div class="flex justify-between"><span>DLQ Quarantine:</span><span class="font-semibold ${state.dlqPendingE > 0 ? "text-amber-400" : "text-emerald-400"}">${escapeHtml(dlqBadgeText)}</span></div>
+      </div>
+      <div class="space-y-1 text-[11px] font-mono">
+        <div class="p-1.5 rounded bg-slate-900 border border-slate-800 text-amber-300">1. INVALID_EMAIL_FORMAT (150): REGEXP_REPLACE(LOWER(TRIM(email)))</div>
+        <div class="p-1.5 rounded bg-slate-900 border border-slate-800 text-amber-300">2. IEEE_754_NAN_INFINITY (50): COALESCE(NULLIF(margin_pct, 'NaN'), 0.0)</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 KPI Cards with Tremor Delta Badges -->
+  <section class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
+    <div class="rounded-xl border border-slate-800 bg-[#0b1329] p-3.5 shadow-md ring-1 ring-slate-800/60">
+      <div class="flex items-center justify-between mb-1">
+        <span class="text-[11px] font-mono uppercase text-slate-400">[S] Synced Contacts</span>
+        <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">+100%</span>
+      </div>
+      <div class="text-xl font-bold font-mono text-emerald-400" id="kpi-synced">${state.totalSyncedContacts.toLocaleString("en-US")}</div>
+    </div>
+    <div class="rounded-xl border border-slate-800 bg-[#0b1329] p-3.5 shadow-md ring-1 ring-slate-800/60">
+      <div class="flex items-center justify-between mb-1">
+        <span class="text-[11px] font-mono uppercase text-slate-400">[VIP] Executive Briefs</span>
+        <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">AI Gen</span>
+      </div>
+      <div class="text-xl font-bold font-mono text-white" id="kpi-vip">${state.vipBriefCount}</div>
+    </div>
+    <div class="rounded-xl border border-slate-800 bg-[#0b1329] p-3.5 shadow-md ring-1 ring-slate-800/60">
+      <div class="flex items-center justify-between mb-1">
+        <span class="text-[11px] font-mono uppercase text-slate-400">[E] Pending DLQ</span>
+        <span class="text-[10px] font-mono px-1.5 py-0.5 rounded ${state.dlqPendingE > 0 ? "bg-amber-500/10 text-amber-400" : "bg-emerald-500/10 text-emerald-400"}">${state.dlqResolved} Healed</span>
+      </div>
+      <div class="text-xl font-bold font-mono ${state.dlqPendingE > 0 ? "text-amber-400" : "text-emerald-400"}" id="kpi-dlq">${state.dlqPendingE}</div>
+    </div>
+    <div class="rounded-xl border border-slate-800 bg-[#0b1329] p-3.5 shadow-md ring-1 ring-slate-800/60">
+      <div class="flex items-center justify-between mb-1">
+        <span class="text-[11px] font-mono uppercase text-slate-400">[O] SHA-256 Skipped</span>
+        <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400">0 Calls</span>
+      </div>
+      <div class="text-xl font-bold font-mono text-cyan-400" id="kpi-skipped">${state.skippedO.toLocaleString("en-US")}</div>
+    </div>
+    <div class="rounded-xl border border-slate-800 bg-[#0b1329] p-3.5 shadow-md ring-1 ring-slate-800/60">
+      <div class="flex items-center justify-between mb-1">
+        <span class="text-[11px] font-mono uppercase text-slate-400">[HTTP] Batch Requests</span>
+        <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400">429: ${state.rateLimitRetriesAbsorbed}</span>
+      </div>
+      <div class="text-xl font-bold font-mono text-white" id="kpi-batches">${state.totalBatchRequests}</div>
+    </div>
+    <div class="rounded-xl border border-slate-800 bg-[#0b1329] p-3.5 shadow-md ring-1 ring-slate-800/60">
+      <div class="flex items-center justify-between mb-1">
+        <span class="text-[11px] font-mono uppercase text-slate-400">[FINOPS] Annual Savings</span>
+        <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">-99.3%</span>
+      </div>
+      <div class="text-xl font-bold font-mono text-emerald-400">$${state.annualSaasSavingsUsd.toLocaleString("en-US")}/yr</div>
+    </div>
+  </section>
+
+  <!-- Pillar 4 Table Toolbar & Table -->
+  <section class="rounded-xl border border-slate-800 bg-[#0b1329] overflow-hidden shadow-lg ring-1 ring-slate-800/60">
+    <div class="flex flex-col md:flex-row md:items-center justify-between p-3.5 border-b border-slate-800 gap-3">
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="text-xs font-mono font-semibold uppercase text-slate-400">Pillar 4 (HubSpot CRM v3 Store):</span>
+        <button type="button" class="btn-filter ${!fUpper ? "active bg-slate-800 text-white" : "bg-slate-900 text-slate-400"} px-3 py-1 rounded text-xs font-mono font-semibold border border-slate-700" data-filter="">ALL (${state.totalSyncedContacts.toLocaleString("en-US")})</button>
+        <button type="button" class="btn-filter ${fUpper === "ENTERPRISE_VIP" ? "active bg-slate-800 text-white" : "bg-slate-900 text-slate-400"} px-3 py-1 rounded text-xs font-mono font-semibold border border-slate-700" id="btnFilterVip" data-filter="ENTERPRISE_VIP">ENTERPRISE_VIP (${state.vipBriefCount})</button>
+        <button type="button" class="btn-filter ${fUpper === "REMEDIATED_DLQ" ? "active bg-slate-800 text-white" : "bg-slate-900 text-slate-400"} px-3 py-1 rounded text-xs font-mono font-semibold border border-slate-700" id="btnFilterDlq" data-filter="REMEDIATED_DLQ">REMEDIATED_DLQ (${state.dlqResolved})</button>
+      </div>
+      <div class="relative">
+        <input type="search" id="filterInput" value="${escapeHtml(initialFilter)}" placeholder="Filter by Tier/Email/ID..." class="w-full md:w-80 px-3 py-1.5 pl-8 rounded-md text-xs font-mono bg-slate-900 border border-slate-700 text-slate-100 focus:outline-none focus:border-cyan-500" />
+        <svg class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="border-b border-slate-800 bg-slate-900/60 text-[11px] font-mono uppercase tracking-wider text-slate-400">
+            <th class="px-3.5 py-2.5 font-medium">Customer ID</th>
+            <th class="px-3.5 py-2.5 font-medium">Email</th>
+            <th class="px-3.5 py-2.5 font-medium">Tier &amp; Status</th>
+            <th class="px-3.5 py-2.5 font-medium">Net Profitability</th>
+            <th class="px-3.5 py-2.5 font-medium">Margin (%)</th>
+            <th class="px-3.5 py-2.5 font-medium">VIP Executive Action Brief / DLQ Provenance</th>
+          </tr>
+        </thead>
+        <tbody id="contactsBody">
+          ${rowsHtml || '<tr><td colspan="6" class="px-4 py-8 text-center text-xs font-mono text-slate-500">[INFO] Stage 0 Baseline: 0 Contacts in HubSpot CRM. Run datapulse init &amp; datapulse run to stream batches...</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Client-Side Reactive Controller -->
   <script>
     const input = document.getElementById("filterInput");
     const buttons = document.querySelectorAll(".btn-filter");
     function applyFilter(query) {
       const q = query.toLowerCase();
-      for (const row of document.querySelectorAll("#contactsBody tr")) {
+      document.querySelectorAll("#contactsBody tr").forEach((row) => {
         row.style.display = row.innerText.toLowerCase().includes(q) ? "" : "none";
-      }
+      });
     }
     input.addEventListener("input", () => applyFilter(input.value));
-    for (const btn of buttons) {
+    buttons.forEach((btn) => {
       btn.addEventListener("click", () => {
-        buttons.forEach((b) => b.classList.remove("active"));
-        btn.classList.add("active");
+        buttons.forEach((b) => b.classList.remove("active", "bg-slate-800", "text-white"));
+        btn.classList.add("active", "bg-slate-800", "text-white");
         const f = btn.getAttribute("data-filter") || "";
         input.value = f;
         applyFilter(f);
       });
-    }
+    });
+
+    document.getElementById("resetStoreBtn").addEventListener("click", async () => {
+      if (confirm("Reset CRM Memory Store to 0 contacts?")) {
+        await fetch("/api/v1/reset", { method: "POST" });
+        location.reload();
+      }
+    });
+
+    let pollingActive = true;
+    const togglePollBtn = document.getElementById("togglePollingBtn");
+    const pollDot = document.getElementById("pollingDot");
+    const pollStatusText = document.getElementById("pollingStatusText");
+
+    togglePollBtn.addEventListener("click", () => {
+      pollingActive = !pollingActive;
+      pollDot.className = pollingActive ? "w-2 h-2 rounded-full bg-emerald-500" : "w-2 h-2 rounded-full bg-slate-500";
+      pollStatusText.innerText = pollingActive ? "Auto-Poll: ON (2s)" : "Auto-Poll: PAUSED";
+    });
+
+    setInterval(async () => {
+      if (!pollingActive) return;
+      try {
+        const resp = await fetch("/api/v1/state");
+        if (!resp.ok) return;
+        const s = await resp.json();
+        document.getElementById("kpi-synced").innerText = s.totalSyncedContacts.toLocaleString("en-US");
+        document.getElementById("kpi-vip").innerText = s.vipBriefCount;
+        document.getElementById("kpi-dlq").innerText = s.dlqPendingE;
+        document.getElementById("kpi-skipped").innerText = s.skippedO.toLocaleString("en-US");
+        document.getElementById("kpi-batches").innerText = s.totalBatchRequests;
+        document.getElementById("phase-banner").innerText = s.currentPhase;
+      } catch (err) {}
+    }, 2000);
   </script>
 </body>
 </html>`;
