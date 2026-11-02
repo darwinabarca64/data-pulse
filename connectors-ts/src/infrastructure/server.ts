@@ -263,45 +263,46 @@ export function createConnectorServer(options: ConnectorServerOptions = {}): { s
       try {
         const body = JSON.parse(await readRequestBody(req)) as { phase?: string };
         const phase = body.phase ?? "init";
-        let cliArgs: string[] = [];
         if (phase === "reset") {
           store.reset();
+          const root = findRepoRoot();
+          for (const f of ["local_warehouse.duckdb", "local_warehouse.duckdb.wal"]) {
+            try {
+              const p = path.join(root, "data", f);
+              if (fs.existsSync(p)) fs.unlinkSync(p);
+            } catch {}
+          }
           sendJson(res, 200, { ok: true, phase, state: store.getState(), consoleOutput: "[OK] Reset to Stage 0 Baseline." });
           return;
         }
-        const phaseArgs: Record<string, string[]> = {
-          init: ["init", "--rows", "10000"],
-          sync: ["run", "--manifest", "syncs/hubspot_profitability.yml"],
-          inspect: ["dlq", "inspect", "--sync-id", "hubspot_customer_profitability"],
-          replay: ["dlq", "replay", "--manifest", "syncs/hubspot_profitability.yml"],
-          idempotent: ["run", "--manifest", "syncs/hubspot_profitability.yml"],
-        };
-        cliArgs = phaseArgs[phase];
-        if (!cliArgs) {
-          sendJson(res, 400, { ok: false, message: `Unsupported phase action: ${phase}` });
+        if (phase === "sync") {
+          const root = findRepoRoot();
+          const dbPath = path.join(root, "data", "local_warehouse.duckdb");
+          if (!fs.existsSync(dbPath) || store.getState().totalSyncedContacts === 0) {
+            for (const f of ["local_warehouse.duckdb", "local_warehouse.duckdb.wal"]) {
+              try {
+                const p = path.join(root, "data", f);
+                if (fs.existsSync(p)) fs.unlinkSync(p);
+              } catch {}
+            }
+            await runPythonCli(["init", "--rows", "10000"]);
+          }
+          const result = await runPythonCli(["run", "--manifest", "syncs/hubspot_profitability.yml"]);
+          sendJson(res, result.code === 0 ? 200 : 500, { ok: result.code === 0, phase, state: store.getState(), consoleOutput: result.stdout || result.stderr });
           return;
         }
-
-        const result = await runPythonCli(cliArgs);
-        if (phase === "init") {
-          store.updateTelemetry({
-            currentPhase: "STAGE 1: WAREHOUSE SEEDED (10,000 ROWS)",
-            dagStatus: "READY: validate_sync_manifest",
-            extractedN: 10000,
-            syncedS: 0,
-            skippedO: 0,
-            dlqPendingE: 0,
-            dlqResolved: 0,
-            annualSaasSavingsUsd: 0,
-          });
+        if (phase === "replay") {
+          await runPythonCli(["dlq", "inspect", "--sync-id", "hubspot_customer_profitability"]);
+          const result = await runPythonCli(["dlq", "replay", "--manifest", "syncs/hubspot_profitability.yml"]);
+          sendJson(res, result.code === 0 ? 200 : 500, { ok: result.code === 0, phase, state: store.getState(), consoleOutput: result.stdout || result.stderr });
+          return;
         }
-        sendJson(res, result.code === 0 ? 200 : 500, {
-          ok: result.code === 0,
-          phase,
-          exitCode: result.code,
-          state: store.getState(),
-          consoleOutput: result.stdout || result.stderr,
-        });
+        if (phase === "idempotent") {
+          const result = await runPythonCli(["run", "--manifest", "syncs/hubspot_profitability.yml"]);
+          sendJson(res, result.code === 0 ? 200 : 500, { ok: result.code === 0, phase, state: store.getState(), consoleOutput: result.stdout || result.stderr });
+          return;
+        }
+        sendJson(res, 400, { ok: false, message: `Unsupported phase action: ${phase}` });
       } catch (err) {
         sendJson(res, 500, { ok: false, message: err instanceof Error ? err.message : String(err) });
       }

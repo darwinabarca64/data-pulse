@@ -182,7 +182,8 @@ it("enforces Honest Zero Baseline when state is 0", () => {
     expect(html).toContain("Stage 0 Baseline");
     expect(html).not.toContain("9,800 Delivered");
     expect(html).not.toContain("200 Repaired");
-    expect(html).toContain('d="M 50 190 L 880 190"');
+    expect(html).toContain("Net Profit &amp; Revenue by Segment");
+    expect(html).toContain("Data Delivery &amp; Quarantine Triage");
     expect(EMOJI_REGEX.test(html)).toBe(false);
   });
 
