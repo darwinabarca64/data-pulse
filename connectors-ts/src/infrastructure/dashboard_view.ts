@@ -73,11 +73,11 @@ function formatRowSsr(c: NormalizedCrmContact): string {
   const marginBadge = `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold ${c.profit_margin_pct < 0 ? "bg-rose-50 text-rose-700 border border-rose-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"}">${c.profit_margin_pct < 0 ? "" : "+"}${c.profit_margin_pct.toFixed(1)}%</span>`;
   const tierBadge = `<span class="px-2 py-0.5 rounded text-xs font-medium ${isVip ? "bg-rose-50 text-rose-700 border border-rose-200" : "bg-zinc-100 text-zinc-700 border border-zinc-200"}">${escapeHtml(c.customer_tier)}</span>`;
   const safeJson = escapeHtml(JSON.stringify(c));
-  return `<tr class="customer-row border-b border-zinc-200 hover:bg-zinc-50/80 transition-colors cursor-pointer" data-contact="${safeJson}" onclick="openInspectorFromRow(this)"><td class="p-3"><div class="flex items-center gap-2"><span class="font-medium text-xs text-zinc-950 font-mono">${escapeHtml(c.customer_id)}</span><span class="px-1.5 py-0.2 rounded text-[10px] font-mono bg-zinc-100 text-zinc-600 border border-zinc-200">${escapeHtml(c.country || "US")}</span></div><div class="text-[11px] text-zinc-500">${escapeHtml(c.company || "Enterprise Account")} • <span class="font-mono">${escapeHtml(c.email)}</span></div></td><td class="p-3">${tierBadge}</td><td class="p-3">${statusPill}</td><td class="p-3 font-mono text-xs font-semibold text-zinc-950">$${c.net_profitability_usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td><td class="p-3">${marginBadge}</td><td class="p-3">${briefCell}</td><td class="p-3 text-right"><button type="button" class="btn-inspect px-2.5 py-1 rounded text-xs font-medium border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100 transition" onclick="event.stopPropagation(); openInspectorFromRow(this.closest('tr'))">Inspect</button></td></tr>`;
+  return `<tr class="customer-row border-b border-zinc-200 hover:bg-zinc-50/80 transition-colors cursor-pointer" data-contact="${safeJson}" onclick="openInspectorFromRow(this)"><td class="p-3 text-center"><input type="checkbox" class="rounded border-zinc-300 text-zinc-900 focus:ring-0" onclick="event.stopPropagation()" /></td><td class="p-3"><div class="flex items-center gap-2"><span class="font-medium text-xs text-zinc-950 font-mono">${escapeHtml(c.customer_id)}</span><span class="px-1.5 py-0.2 rounded text-[10px] font-mono bg-zinc-100 text-zinc-600 border border-zinc-200">${escapeHtml(c.country || "US")}</span></div><div class="text-[11px] text-zinc-500">${escapeHtml(c.company || "Enterprise Account")} • <span class="font-mono">${escapeHtml(c.email)}</span></div></td><td class="p-3">${tierBadge}</td><td class="p-3">${statusPill}</td><td class="p-3 font-mono text-xs font-semibold text-zinc-950">$${c.net_profitability_usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td><td class="p-3">${marginBadge}</td><td class="p-3">${briefCell}</td><td class="p-3 text-right"><button type="button" class="btn-inspect px-2.5 py-1 rounded text-xs font-medium border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100 transition" onclick="event.stopPropagation(); openInspectorFromRow(this.closest('tr'))">Inspect</button></td></tr>`;
 }
 
 function renderInitialRows(contacts: NormalizedCrmContact[], isZero: boolean): string {
-  if (isZero || !contacts || contacts.length === 0) return '<tr><td colspan="7" class="p-12 text-center text-xs text-zinc-500 font-mono">Stage 0 Baseline: 0 Contacts in CRM. Ingestion pipeline is idle. Click "1. Run Initial Sync" above to stream batches...</td></tr>';
+  if (isZero || !contacts || contacts.length === 0) return '<tr><td colspan="8" class="p-12 text-center text-xs text-zinc-500 font-mono">Stage 0 Baseline: 0 Contacts in CRM. Ingestion pipeline is idle. Click "1. Run Initial Sync" above to stream batches...</td></tr>';
   return contacts.slice(0, 25).map(formatRowSsr).join("\n");
 }
 
@@ -132,58 +132,75 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
   </header>
 
   <main class="flex-1 p-4 sm:p-6 space-y-5 sm:space-y-6 max-w-7xl mx-auto w-full" id="mainScrollContainer">
-    <!-- 4 KPI Cards -->
+    <!-- 4 KPI Cards Matching Screenshot Pattern -->
     <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
       <div class="rounded-xl border border-zinc-200 bg-white p-4 sm:p-5 shadow-sm">
-        <div class="flex items-center justify-between"><span class="text-xs font-medium text-zinc-500 flex items-center">Synced CRM Customers<button type="button" class="info-btn text-zinc-400 hover:text-zinc-900 transition p-0.5 ml-1" onclick="openInfoPopover('synced')"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button></span><div class="w-7 h-7 rounded-md bg-zinc-100 flex items-center justify-center text-zinc-600"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg></div></div>
+        <div class="flex items-center justify-between"><span class="text-xs font-medium text-zinc-500 flex items-center">Synced CRM Customers<button type="button" class="info-btn text-zinc-400 hover:text-zinc-900 transition p-0.5 ml-1" onclick="openInfoPopover('synced')"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button></span><span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200" id="kpi-synced-pill">${isZero ? "+0%" : state.totalSyncedContacts >= 10000 ? "+100%" : "+98.0%"}</span></div>
         <div class="mt-3"><div class="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-950" id="kpi-synced">${state.totalSyncedContacts.toLocaleString("en-US")}</div><div class="mt-2 text-xs text-zinc-500" id="kpi-synced-trend">${syncedTrendHtml}</div></div>
       </div>
       <div class="rounded-xl border border-zinc-200 bg-white p-4 sm:p-5 shadow-sm">
-        <div class="flex items-center justify-between"><span class="text-xs font-medium text-zinc-500 flex items-center">VIP Accounts at Risk<button type="button" class="info-btn text-zinc-400 hover:text-zinc-900 transition p-0.5 ml-1" onclick="openInfoPopover('vip')"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button></span><div class="w-7 h-7 rounded-md bg-rose-50 flex items-center justify-center text-rose-600"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div></div>
+        <div class="flex items-center justify-between"><span class="text-xs font-medium text-zinc-500 flex items-center">VIP Accounts at Risk<button type="button" class="info-btn text-zinc-400 hover:text-zinc-900 transition p-0.5 ml-1" onclick="openInfoPopover('vip')"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button></span><span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200" id="kpi-vip-pill">${isZero ? "0%" : "-20.0%"}</span></div>
         <div class="mt-3"><div class="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-950" id="kpi-vip">${state.vipBriefCount}</div><div class="mt-2 text-xs text-zinc-500" id="kpi-vip-trend">${vipTrendHtml}</div></div>
       </div>
       <div class="rounded-xl border border-zinc-200 bg-white p-4 sm:p-5 shadow-sm">
-        <div class="flex items-center justify-between"><span class="text-xs font-medium text-zinc-500 flex items-center">Records Held for Review<button type="button" class="info-btn text-zinc-400 hover:text-zinc-900 transition p-0.5 ml-1" onclick="openInfoPopover('dlq')"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg></button></span><div class="w-7 h-7 rounded-md bg-zinc-100 flex items-center justify-center text-zinc-600"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg></div></div>
-        <div class="mt-3"><div class="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-950 flex items-center gap-2"><span id="kpi-dlq">${state.dlqPendingE}</span><span class="w-2.5 h-2.5 rounded-full ${dlqDotColor}" id="kpi-dlq-dot"></span></div><div class="mt-2 text-xs" id="kpi-dlq-trend">${dlqTrendHtml}</div></div>
+        <div class="flex items-center justify-between"><span class="text-xs font-medium text-zinc-500 flex items-center">Records Held for Review<button type="button" class="info-btn text-zinc-400 hover:text-zinc-900 transition p-0.5 ml-1" onclick="openInfoPopover('dlq')"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button></span><span class="w-2.5 h-2.5 rounded-full ${dlqDotColor}" id="kpi-dlq-dot"></span></div>
+        <div class="mt-3"><div class="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-950" id="kpi-dlq">${state.dlqPendingE}</div><div class="mt-2 text-xs" id="kpi-dlq-trend">${dlqTrendHtml}</div></div>
       </div>
       <div class="rounded-xl border border-zinc-200 bg-white p-4 sm:p-5 shadow-sm">
-        <div class="flex items-center justify-between"><span class="text-xs font-medium text-zinc-500 flex items-center">Annual Cloud Savings<button type="button" class="info-btn text-zinc-400 hover:text-zinc-900 transition p-0.5 ml-1" onclick="openInfoPopover('savings')"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button></span><div class="w-7 h-7 rounded-md bg-emerald-50 flex items-center justify-center text-emerald-600"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div></div>
+        <div class="flex items-center justify-between"><span class="text-xs font-medium text-zinc-500 flex items-center">Annual Cloud Savings<button type="button" class="info-btn text-zinc-400 hover:text-zinc-900 transition p-0.5 ml-1" onclick="openInfoPopover('savings')"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button></span><span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">+99.3%</span></div>
         <div class="mt-3"><div class="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-950" id="kpi-savings">${savingsValue}</div><div class="mt-2 text-xs text-zinc-500" id="kpi-savings-trend">${savingsTrendHtml}</div></div>
       </div>
     </section>
 
-    <!-- Task Manager Style Live Performance Engine Chart -->
-    <section class="rounded-xl border border-zinc-200 bg-white p-4 sm:p-5 shadow-sm" id="taskManagerSection">
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-zinc-100 gap-2">
-        <div class="flex items-center gap-2.5">
-          <div class="w-7 h-7 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-xs"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
-          <div><h2 class="text-sm font-bold text-zinc-950">Rendimiento del Motor en Tiempo Real</h2><p class="text-xs text-zinc-500">Telemetria de velocidad de ingesta, latencia de lotes y utilizacion de memoria (estilo Task Manager)</p></div>
+    <!-- Shadcn Dual-Wave Area Chart: Synchronization & Delivery Progression (Screenshot Match) -->
+    <section class="rounded-xl border border-zinc-200 bg-white p-4 sm:p-6 shadow-sm">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-zinc-100 gap-3">
+        <div>
+          <h2 class="text-base font-bold text-zinc-950">Data Pipeline Volume &amp; Synchronization Flow</h2>
+          <p class="text-xs text-zinc-500 mt-0.5">Continuous reverse-ETL ingestion progression across 100 batch micro-dispatches</p>
         </div>
-        <div class="flex items-center gap-4 text-xs font-mono flex-wrap">
-          <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-emerald-600"></span><span class="text-zinc-600">Ingesta:</span> <span id="perfThroughputVal" class="font-bold text-emerald-700">0 rec/s</span></div>
-          <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-rose-600"></span><span class="text-zinc-600">DLQ:</span> <span id="perfDlqVal" class="font-bold text-rose-700">0 err/s</span></div>
-          <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-amber-500"></span><span class="text-zinc-600">Reparados:</span> <span id="perfHealedVal" class="font-bold text-amber-700">0 fix/s</span></div>
+        <div class="flex items-center gap-1.5 p-1 rounded-lg border border-zinc-200 bg-zinc-50 text-xs">
+          <button type="button" onclick="setChartMetric('delivered')" id="chartBtnDelivered" class="px-2.5 py-1 rounded font-medium bg-white text-zinc-950 shadow-sm transition">Delivered (S)</button>
+          <button type="button" onclick="setChartMetric('quarantined')" id="chartBtnDlq" class="px-2.5 py-1 rounded font-medium text-zinc-600 hover:text-zinc-950 transition">Quarantined (E)</button>
+          <button type="button" onclick="setChartMetric('combined')" id="chartBtnCombined" class="px-2.5 py-1 rounded font-medium text-zinc-600 hover:text-zinc-950 transition">All Flow</button>
         </div>
       </div>
 
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 my-3 text-xs font-mono">
-        <div class="p-2.5 rounded-lg bg-zinc-50 border border-zinc-200"><div class="text-[10px] uppercase text-zinc-400">Velocidad Pico</div><div class="text-base font-bold text-emerald-700" id="hudPeakSpeed">${isZero ? "0 rec/s" : "1,250 rec/s"}</div></div>
-        <div class="p-2.5 rounded-lg bg-zinc-50 border border-zinc-200"><div class="text-[10px] uppercase text-zinc-400">Latencia Lote (100)</div><div class="text-base font-bold text-zinc-900" id="hudBatchLatency">&lt; 8.2 ms</div></div>
-        <div class="p-2.5 rounded-lg bg-zinc-50 border border-zinc-200"><div class="text-[10px] uppercase text-zinc-400">Parse DAG SLA</div><div class="text-base font-bold text-emerald-700">&lt; 0.05 s</div></div>
-        <div class="p-2.5 rounded-lg bg-zinc-50 border border-zinc-200"><div class="text-[10px] uppercase text-zinc-400">Memoria Heap (O(1))</div><div class="text-base font-bold text-zinc-900" id="hudMemoryHeap">18.4 MB</div></div>
-      </div>
-
-      <div class="relative w-full h-28 bg-zinc-950 rounded-lg overflow-hidden border border-zinc-800 p-1">
-        <svg class="w-full h-full" id="perfSvgCanvas" viewBox="0 0 600 100" preserveAspectRatio="none">
+      <!-- Area Chart SVG Canvas -->
+      <div class="relative w-full h-56 pt-4">
+        <svg class="w-full h-full overflow-visible" id="areaChartSvg" viewBox="0 0 900 200" preserveAspectRatio="none">
           <defs>
-            <pattern id="taskGrid" width="40" height="20" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 20" fill="none" stroke="#27272a" stroke-width="0.5"/></pattern>
+            <linearGradient id="emeraldAreaGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#059669" stop-opacity="0.28" />
+              <stop offset="100%" stop-color="#059669" stop-opacity="0.0" />
+            </linearGradient>
+            <linearGradient id="roseAreaGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#e11d48" stop-opacity="0.25" />
+              <stop offset="100%" stop-color="#e11d48" stop-opacity="0.0" />
+            </linearGradient>
           </defs>
-          <rect width="100%" height="100%" fill="url(#taskGrid)"/>
-          <polyline id="perfPolylineThroughput" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="0,96 600,96"/>
-          <polyline id="perfPolylineDlq" fill="none" stroke="#e11d48" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="0,96 600,96"/>
+          <!-- Horizontal Baseline Grid Lines -->
+          <line x1="30" y1="40" x2="880" y2="40" stroke="#f4f4f5" stroke-width="1" />
+          <line x1="30" y1="90" x2="880" y2="90" stroke="#f4f4f5" stroke-width="1" />
+          <line x1="30" y1="140" x2="880" y2="140" stroke="#f4f4f5" stroke-width="1" />
+          <line x1="30" y1="180" x2="880" y2="180" stroke="#e4e4e7" stroke-width="1" />
+
+          <!-- Real Area Path & Stroke -->
+          <path id="chartAreaDelivered" fill="url(#emeraldAreaGradient)" d="M 30 180 L 880 180" />
+          <path id="chartPathDelivered" fill="none" stroke="#059669" stroke-width="2.5" stroke-linecap="round" d="M 30 180 L 880 180" />
+
+          <!-- Quarantine/DLQ Wave Path -->
+          <path id="chartAreaDlq" fill="url(#roseAreaGradient)" d="M 30 180 L 880 180" opacity="0.8" />
+          <path id="chartPathDlq" fill="none" stroke="#e11d48" stroke-width="2" stroke-linecap="round" d="M 30 180 L 880 180" opacity="0.8" />
         </svg>
-        <div class="absolute bottom-1.5 left-3 text-[10px] font-mono text-zinc-500">60s ventana en vivo • Monitor O(1)</div>
-        <div class="absolute top-1.5 right-3 text-[10px] font-mono text-emerald-500 font-semibold" id="perfStatusIndicator">EN ESPERA</div>
+        <div id="chartZeroOverlay" class="${isZero ? "flex" : "hidden"} absolute inset-0 items-center justify-center bg-white/60 backdrop-blur-[1px]">
+          <span class="px-3 py-1.5 rounded-full text-xs font-mono font-medium bg-zinc-100 text-zinc-600 border border-zinc-200 shadow-sm">Stage 0 Baseline • 0 lotes ingeridos — Ejecuta el sync para graficar</span>
+        </div>
+      </div>
+
+      <!-- X-Axis Labels -->
+      <div class="flex items-center justify-between text-[11px] font-mono text-zinc-400 mt-2 px-6">
+        <span>Lote 1</span><span>Lote 20</span><span>Lote 40</span><span>Lote 60</span><span>Lote 80</span><span>Lote 100</span>
       </div>
     </section>
 
@@ -263,18 +280,25 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
       </div>
     </section>
 
-    <!-- Customer Records Table -->
+    <!-- Warehouse Records Table (Matching Screenshot Table & Tabs) -->
     <section class="rounded-xl border border-zinc-200 bg-white overflow-hidden shadow-sm" id="customer-table-section">
       <div class="p-3.5 sm:p-4 border-b border-zinc-200 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div class="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 w-full lg:w-auto scrollbar-none">
-          <button type="button" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition bg-zinc-950 text-white shadow-sm shrink-0" data-tab="all">All Customers (<span id="tabCountAll">${state.totalSyncedContacts.toLocaleString("en-US")}</span>)</button>
-          <button type="button" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-600 hover:text-zinc-950 transition inline-flex items-center shrink-0" data-tab="vip"><span class="w-1.5 h-1.5 rounded-full bg-rose-600 mr-1.5"></span>VIP Retention Alerts (<span id="tabCountVip">${state.vipBriefCount}</span>)</button>
-          <button type="button" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-600 hover:text-zinc-950 transition inline-flex items-center shrink-0" data-tab="repaired"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>Repaired Records (<span id="tabCountRepaired">${state.dlqResolved}</span>)</button>
-          <button type="button" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-600 hover:text-zinc-950 transition inline-flex items-center shrink-0" data-tab="health"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>Pipeline &amp; Cloud Guardrails (4)</button>
+          <button type="button" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition bg-zinc-950 text-white shadow-sm shrink-0" data-tab="all">All Warehouse Records (<span id="tabCountAll">${state.totalSyncedContacts.toLocaleString("en-US")}</span>)</button>
+          <button type="button" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-600 hover:text-zinc-950 transition inline-flex items-center shrink-0" data-tab="vip"><span class="w-1.5 h-1.5 rounded-full bg-rose-600 mr-1.5"></span>VIP Risk Alerts (<span id="tabCountVip">${state.vipBriefCount}</span>)</button>
+          <button type="button" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-600 hover:text-zinc-950 transition inline-flex items-center shrink-0" data-tab="repaired"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>DLQ Repaired (<span id="tabCountRepaired">${state.dlqResolved}</span>)</button>
+          <button type="button" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-600 hover:text-zinc-950 transition inline-flex items-center shrink-0" data-tab="health"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>Pipeline Architecture &amp; SLA (4)</button>
         </div>
-        <div class="relative w-full lg:w-72" id="filterContainer">
-          <input type="search" id="filterInput" value="${escapeHtml(initialFilter)}" placeholder="Filtrar por ID, empresa, tier..." class="w-full px-3 py-1.5 pl-8 rounded-lg text-xs font-mono bg-zinc-50 border border-zinc-200 text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400" />
-          <svg class="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <div class="flex items-center gap-2 w-full lg:w-auto">
+          <button type="button" onclick="openInfoPopover('schema')" class="px-2.5 py-1.5 rounded-lg border border-zinc-200 bg-white text-xs font-medium text-zinc-700 hover:bg-zinc-100 transition shrink-0 flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+            <span>Schema Mapping</span>
+            <svg class="w-3 h-3 text-zinc-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <div class="relative w-full lg:w-64" id="filterContainer">
+            <input type="search" id="filterInput" value="${escapeHtml(initialFilter)}" placeholder="Filtrar por ID, empresa, tier..." class="w-full px-3 py-1.5 pl-8 rounded-lg text-xs font-mono bg-zinc-50 border border-zinc-200 text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400" />
+            <svg class="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          </div>
         </div>
       </div>
 
@@ -282,12 +306,13 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
         <table class="w-full text-left border-collapse min-w-[760px]">
           <thead>
             <tr class="border-b border-zinc-200 bg-zinc-50/70 text-[11px] font-mono uppercase text-zinc-500">
-              <th class="p-3 font-medium">Customer &amp; Company</th>
-              <th class="p-3 font-medium">Segment</th>
-              <th class="p-3 font-medium">Sync Status</th>
+              <th class="p-3 text-center w-10"><input type="checkbox" class="rounded border-zinc-300 text-zinc-900 focus:ring-0" /></th>
+              <th class="p-3 font-medium">Record Identifier &amp; Source</th>
+              <th class="p-3 font-medium">Segment Tier</th>
+              <th class="p-3 font-medium">Delivery Status</th>
               <th class="p-3 font-medium">Net Profit</th>
               <th class="p-3 font-medium">Margin</th>
-              <th class="p-3 font-medium">Recommended Sales Action</th>
+              <th class="p-3 font-medium">Enrichment / Action</th>
               <th class="p-3 font-medium text-right">Details</th>
             </tr>
           </thead>
@@ -295,7 +320,7 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
         </table>
       </div>
 
-      <!-- Block Pagination & Down Arrow Block Loader -->
+      <!-- Pagination & Block Loader Bar -->
       <div class="p-3.5 border-t border-zinc-200 flex flex-col sm:flex-row items-center justify-between gap-3 bg-zinc-50/50" id="tablePaginationBar">
         <div class="text-xs text-zinc-600 font-mono">
           Mostrando <span id="pageRangeSpan" class="font-bold text-zinc-900">1 - ${isZero ? 0 : Math.min(25, state.totalSyncedContacts)}</span> de <span id="pageTotalSpan" class="font-bold text-zinc-900">${state.totalSyncedContacts.toLocaleString("en-US")}</span> registros
@@ -309,7 +334,7 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
         </div>
       </div>
 
-      <!-- Pipeline & Cloud Health View (Tab 4) -->
+      <!-- Pipeline Architecture & Cloud Health View (Tab 4) -->
       <div id="healthTableWrapper" class="hidden p-4 sm:p-5 overflow-x-auto">
         <div class="rounded-xl border border-zinc-200 overflow-hidden bg-white min-w-[700px]">
           <table class="w-full text-left border-collapse">
@@ -326,6 +351,7 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
     </section>
   </main>
 
+  <!-- Info Modal Popover (Also houses Schema Mapping) -->
   <div id="infoPopoverBackdrop" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 hidden opacity-0 transition-opacity duration-150 flex items-center justify-center p-4">
     <div id="infoPopoverCard" class="bg-white border border-zinc-200 rounded-xl shadow-2xl max-w-lg w-full p-5 sm:p-6 transform scale-95 transition-transform duration-150 max-h-[90vh] overflow-y-auto">
       <div class="flex items-start justify-between pb-3 border-b border-zinc-100">
@@ -340,16 +366,17 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
     </div>
   </div>
 
+  <!-- Inspector Slide-Over Drawer -->
   <div id="drawerBackdrop" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 hidden opacity-0 transition-opacity duration-200"></div>
   <aside id="inspectorDrawer" class="fixed right-0 top-0 bottom-0 w-full sm:max-w-xl bg-white border-l border-zinc-200 shadow-2xl z-50 transform translate-x-full transition-transform duration-300 ease-out flex flex-col">
     <div class="flex items-center justify-between p-4 border-b border-zinc-200">
-      <div class="flex items-center gap-2"><div class="w-7 h-7 rounded-md bg-zinc-100 flex items-center justify-center text-zinc-900"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><h2 class="text-sm font-bold text-zinc-950" id="drawerTitle">Customer Payload Inspector</h2></div>
+      <div class="flex items-center gap-2"><div class="w-7 h-7 rounded-md bg-zinc-100 flex items-center justify-center text-zinc-900"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><h2 class="text-sm font-bold text-zinc-950" id="drawerTitle">Record Payload Inspector</h2></div>
       <button id="closeDrawerBtn" type="button" class="p-1.5 rounded-md text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 transition"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
     </div>
     <div class="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 font-mono text-xs">
-      <div><div class="text-[11px] uppercase tracking-wider text-zinc-400 mb-1">Customer Identifier &amp; Segment</div><div class="flex items-center gap-2"><span class="text-base font-bold text-zinc-950" id="drawerCustId">-</span><span class="px-2 py-0.5 rounded text-xs bg-zinc-100 text-zinc-800 border border-zinc-200" id="drawerTier">-</span></div></div>
+      <div><div class="text-[11px] uppercase tracking-wider text-zinc-400 mb-1">Record Identifier &amp; Segment</div><div class="flex items-center gap-2"><span class="text-base font-bold text-zinc-950" id="drawerCustId">-</span><span class="px-2 py-0.5 rounded text-xs bg-zinc-100 text-zinc-800 border border-zinc-200" id="drawerTier">-</span></div></div>
       <div><div class="text-[11px] uppercase tracking-wider text-zinc-400 mb-1">Computed SHA-256 Payload Hash</div><div class="p-2.5 rounded-lg bg-zinc-50 border border-zinc-200 text-zinc-800 break-all select-all flex items-center justify-between gap-2" id="drawerSha256Box"><span id="drawerSha256">-</span><button type="button" onclick="navigator.clipboard.writeText(document.getElementById('drawerSha256').innerText)" class="text-[10px] text-zinc-500 hover:text-zinc-900 shrink-0 uppercase font-semibold">Copy</button></div></div>
-      <div><div class="text-[11px] uppercase tracking-wider text-zinc-400 mb-1">HubSpot v3 Ingest Property Mapping</div><div class="rounded-lg border border-zinc-200 overflow-hidden"><table class="w-full text-left"><tbody id="drawerPropMapping" class="divide-y divide-zinc-200 text-[11px]"></tbody></table></div></div>
+      <div><div class="text-[11px] uppercase tracking-wider text-zinc-400 mb-1">Declarative Manifest Field Mapping</div><div class="rounded-lg border border-zinc-200 overflow-hidden"><table class="w-full text-left"><tbody id="drawerPropMapping" class="divide-y divide-zinc-200 text-[11px]"></tbody></table></div></div>
       <div><div class="text-[11px] uppercase tracking-wider text-zinc-400 mb-1">Canonical RFC-8259 JSON Payload</div><pre class="p-3.5 rounded-lg bg-zinc-50 border border-zinc-200 text-zinc-800 overflow-x-auto text-[11px] leading-relaxed" id="drawerJson">-</pre></div>
     </div>
   </aside>
@@ -362,23 +389,20 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
     let currentLiveState = JSON.parse("${initialStateJson}");
     let activeTab = "all";
     let activeSegmentFilter = "";
+    let activeChartMetric = "delivered";
     let filterQuery = "${escapeHtml(initialFilter)}".toLowerCase();
     let pollingActive = true;
     let pageOffset = 0;
     let pageLimit = 25;
     let searchDebounceTimer = null;
-    let lastSyncedCount = currentLiveState.totalSyncedContacts;
-    let lastDlqPending = currentLiveState.dlqPendingE;
-    let lastDlqResolved = currentLiveState.dlqResolved;
-    let throughputHistory = new Array(60).fill(0);
-    let dlqHistory = new Array(60).fill(0);
 
     const infoDict = {
       overview: { title: "Executive Overview Mission Control", business: "High-level command center combining Power BI simplicity with instant visibility into customer synchronization, risk alerts, and data hygiene.", tech: "Consolidates Reverse ETL execution metrics from Snowflake/DuckDB into HubSpot CRM v3 with cryptographic audit trails and sub-second SLA validation." },
-      synced: { title: "Synced CRM Customers", business: "Total verified customer profiles successfully pushed to your active HubSpot CRM, enriched with profitability calculations and tier rankings ready for sales outreach.", tech: "Validated against contract schemas. Dispatched via idempotent HTTP batch upserts with SHA-256 payload hashing to eliminate redundant API roundtrips." },
+      synced: { title: "Synced CRM Records", business: "Total verified customer profiles successfully pushed to your active destination CRM, enriched with profitability calculations and tier rankings ready for sales outreach.", tech: "Validated against contract schemas. Dispatched via idempotent HTTP batch upserts with SHA-256 payload hashing to eliminate redundant API roundtrips." },
       vip: { title: "VIP Accounts at Risk", business: "High-value enterprise accounts whose operating margin dropped below -20.0%, alerting executive leadership to initiate retention strategies before renewal churn.", tech: "Identified via SQL window analytics and rule engine thresholds (customer_tier = 'ENTERPRISE_VIP' AND margin_pct <= -20.0). Auto-generates AI executive briefs stored directly in custom CRM properties." },
       dlq: { title: "Records Held for Review (Data Quarantine)", business: "Corrupted records paused at the boundary to prevent CRM pollution, then repaired automatically by our AI Doctor without requiring human intervention.", tech: "Implements Dead Letter Queue isolation: 150 malformed emails remediated via RFC-5322 regex sanitization, and 50 IEEE-754 NaN margins safely coalesced to 0.0 with audit trail." },
-      savings: { title: "Annual Cloud Savings", business: "Direct cost reduction achieved by executing data pipelines in-engine rather than paying third-party SaaS vendors per-row ingestion fees.", tech: "Replaces commercial Reverse ETL vendor ($4,200/yr) with serverless Snowflake XS warehouse execution under FinOps auto-suspend (60s) policies costing $2.50/mo (99.3% reduction)." }
+      savings: { title: "Annual Cloud Savings", business: "Direct cost reduction achieved by executing data pipelines in-engine rather than paying third-party SaaS vendors per-row ingestion fees.", tech: "Replaces commercial Reverse ETL vendor ($4,200/yr) with serverless Snowflake XS warehouse execution under FinOps auto-suspend (60s) policies costing $2.50/mo (99.3% reduction)." },
+      schema: { title: "Declarative Schema Mapping (Any Warehouse Table)", business: "DataPulse is schema-agnostic. The declarative YAML manifest maps any analytical warehouse mart (fct_customer_profitability, orders, subscriptions) to any CRM or SaaS API target.", tech: "Configured via syncs/hubspot_profitability.yml: maps 11 warehouse columns (customer_id -> datapulse_customer_id, annual_revenue -> annualrevenue, net_profitability_usd -> hs_net_profitability_usd) with runtime Pydantic v2 validation." }
     };
 
     const popoverBackdrop = document.getElementById("infoPopoverBackdrop");
@@ -454,6 +478,68 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
       });
       if (clearBtn) clearBtn.className = activeSegmentFilter ? "self-start sm:self-auto px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-600 text-white transition" : "hidden";
       if (activeLabel) activeLabel.innerText = activeSegmentFilter ? activeSegmentFilter : "None (All Records)";
+    }
+
+    function setChartMetric(metric) {
+      activeChartMetric = metric;
+      const bDel = document.getElementById("chartBtnDelivered");
+      const bDlq = document.getElementById("chartBtnDlq");
+      const bComb = document.getElementById("chartBtnCombined");
+      [bDel, bDlq, bComb].forEach((b) => { if (b) b.className = "px-2.5 py-1 rounded font-medium text-zinc-600 hover:text-zinc-950 transition"; });
+      if (metric === "delivered" && bDel) bDel.className = "px-2.5 py-1 rounded font-medium bg-white text-zinc-950 shadow-sm transition";
+      if (metric === "quarantined" && bDlq) bDlq.className = "px-2.5 py-1 rounded font-medium bg-white text-zinc-950 shadow-sm transition";
+      if (metric === "combined" && bComb) bComb.className = "px-2.5 py-1 rounded font-medium bg-white text-zinc-950 shadow-sm transition";
+      renderAreaChart(currentLiveState);
+    }
+
+    function renderAreaChart(s) {
+      const isZero = s.totalSyncedContacts === 0 && s.extractedN === 0;
+      const overlay = document.getElementById("chartZeroOverlay");
+      if (overlay) overlay.className = isZero ? "flex absolute inset-0 items-center justify-center bg-white/60 backdrop-blur-[1px]" : "hidden";
+
+      const pathDelivered = document.getElementById("chartPathDelivered");
+      const areaDelivered = document.getElementById("chartAreaDelivered");
+      const pathDlq = document.getElementById("chartPathDlq");
+      const areaDlq = document.getElementById("chartAreaDlq");
+
+      if (isZero) {
+        if (pathDelivered) pathDelivered.setAttribute("d", "M 30 180 L 880 180");
+        if (areaDelivered) areaDelivered.setAttribute("d", "M 30 180 L 880 180");
+        if (pathDlq) pathDlq.setAttribute("d", "M 30 180 L 880 180");
+        if (areaDlq) areaDlq.setAttribute("d", "M 30 180 L 880 180");
+        return;
+      }
+
+      const totalTarget = Math.max(1, s.extractedN || 10000);
+      const deliveredProgress = Math.min(1, s.syncedS / totalTarget);
+      const dlqRatio = Math.min(0.2, (s.dlqPendingE || (s.syncedS < 10000 ? 200 : 0)) / 1000);
+
+      const dTargetY = Math.round(180 - (deliveredProgress * 140));
+      const midY = Math.round(180 - (deliveredProgress * 95));
+      const p1 = "M 30 180 C 220 180, 360 " + midY + ", 540 " + (dTargetY + 12) + " C 680 " + (dTargetY + 6) + ", 780 " + dTargetY + ", 880 " + dTargetY;
+      const a1 = p1 + " L 880 180 L 30 180 Z";
+
+      const dlqPeakY = Math.round(180 - (dlqRatio * 320));
+      const dlqEndY = s.dlqPendingE > 0 ? dlqPeakY : 180;
+      const p2 = "M 30 180 C 180 180, 320 " + dlqPeakY + ", 500 " + dlqPeakY + " C 660 " + dlqPeakY + ", 760 " + (dlqEndY + 5) + ", 880 " + dlqEndY;
+      const a2 = p2 + " L 880 180 L 30 180 Z";
+
+      if (activeChartMetric === "delivered") {
+        if (pathDelivered) { pathDelivered.setAttribute("d", p1); pathDelivered.style.display = ""; }
+        if (areaDelivered) { areaDelivered.setAttribute("d", a1); areaDelivered.style.display = ""; }
+        if (pathDlq) pathDlq.style.display = "none";
+        if (areaDlq) areaDlq.style.display = "none";
+      } else if (activeChartMetric === "quarantined") {
+        if (pathDelivered) pathDelivered.style.display = "none";
+        if (areaDelivered) areaDelivered.style.display = "none";
+        if (pathDlq) { pathDlq.setAttribute("d", p2); pathDlq.style.display = ""; }
+        if (areaDlq) { areaDlq.setAttribute("d", a2); areaDlq.style.display = ""; }
+      } else {
+        if (pathDelivered) { pathDelivered.setAttribute("d", p1); pathDelivered.style.display = ""; }
+        if (areaDelivered) { areaDelivered.setAttribute("d", a1); areaDelivered.style.display = ""; }
+        if (pathDlq) { pathDlq.setAttribute("d", p2); pathDlq.style.display = ""; }
+        if (areaDlq) { areaDlq.setAttribute("d", a2); areaDlq.style.display = ""; }
+      }
     }
 
     function renderPowerBiAnalytics(s) {
@@ -576,7 +662,7 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
       const marginBadge = c.profit_margin_pct < 0 ? '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">' + c.profit_margin_pct.toFixed(1) + '%</span>' : '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">+' + c.profit_margin_pct.toFixed(1) + '%</span>';
       const tierBadge = isVip ? '<span class="px-2 py-0.5 rounded text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200">' + escapeHtml(c.customer_tier) + '</span>' : '<span class="px-2 py-0.5 rounded text-xs font-medium bg-zinc-100 text-zinc-700 border border-zinc-200">' + escapeHtml(c.customer_tier) + '</span>';
       const safeJson = escapeHtml(JSON.stringify(c));
-      return '<tr class="customer-row border-b border-zinc-200 hover:bg-zinc-50/80 transition-colors cursor-pointer" data-contact="' + safeJson + '" onclick="openInspectorFromRow(this)"><td class="p-3"><div class="flex items-center gap-2"><span class="font-medium text-xs text-zinc-950 font-mono">' + escapeHtml(c.customer_id) + '</span><span class="px-1.5 py-0.2 rounded text-[10px] font-mono bg-zinc-100 text-zinc-600 border border-zinc-200">' + escapeHtml(c.country || "US") + '</span></div><div class="text-[11px] text-zinc-500">' + escapeHtml(c.company || "Enterprise Account") + ' • <span class="font-mono">' + escapeHtml(c.email) + '</span></div></td><td class="p-3">' + tierBadge + '</td><td class="p-3">' + statusPill + '</td><td class="p-3 font-mono text-xs font-semibold text-zinc-950">$' + (c.net_profitability_usd || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</td><td class="p-3">' + marginBadge + '</td><td class="p-3">' + briefCell + '</td><td class="p-3 text-right"><button type="button" class="btn-inspect px-2.5 py-1 rounded text-xs font-medium border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100 transition" onclick="event.stopPropagation(); openInspectorFromRow(this.closest(\'tr\'))">Inspect</button></td></tr>';
+      return '<tr class="customer-row border-b border-zinc-200 hover:bg-zinc-50/80 transition-colors cursor-pointer" data-contact="' + safeJson + '" onclick="openInspectorFromRow(this)"><td class="p-3 text-center"><input type="checkbox" class="rounded border-zinc-300 text-zinc-900 focus:ring-0" onclick="event.stopPropagation()" /></td><td class="p-3"><div class="flex items-center gap-2"><span class="font-medium text-xs text-zinc-950 font-mono">' + escapeHtml(c.customer_id) + '</span><span class="px-1.5 py-0.2 rounded text-[10px] font-mono bg-zinc-100 text-zinc-600 border border-zinc-200">' + escapeHtml(c.country || "US") + '</span></div><div class="text-[11px] text-zinc-500">' + escapeHtml(c.company || "Enterprise Account") + ' • <span class="font-mono">' + escapeHtml(c.email) + '</span></div></td><td class="p-3">' + tierBadge + '</td><td class="p-3">' + statusPill + '</td><td class="p-3 font-mono text-xs font-semibold text-zinc-950">$' + (c.net_profitability_usd || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</td><td class="p-3">' + marginBadge + '</td><td class="p-3">' + briefCell + '</td><td class="p-3 text-right"><button type="button" class="btn-inspect px-2.5 py-1 rounded text-xs font-medium border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100 transition" onclick="event.stopPropagation(); openInspectorFromRow(this.closest(\'tr\'))">Inspect</button></td></tr>';
     }
 
     async function loadContacts(append = false) {
@@ -584,7 +670,7 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
       if (!tbody) return;
       const isZero = currentLiveState.totalSyncedContacts === 0 && currentLiveState.extractedN === 0;
       if (isZero) {
-        tbody.innerHTML = '<tr><td colspan="7" class="p-12 text-center text-xs text-zinc-500 font-mono">Stage 0 Baseline: 0 Contacts in CRM. Ingestion pipeline is idle. Click "1. Run Initial Sync" above to stream batches...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="p-12 text-center text-xs text-zinc-500 font-mono">Stage 0 Baseline: 0 Contacts in CRM. Ingestion pipeline is idle. Click "1. Run Initial Sync" above to stream batches...</td></tr>';
         updatePaginationUi(0, 0, 0, false);
         return;
       }
@@ -597,7 +683,7 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
         const data = await resp.json();
         const rowsHtml = (data.contacts || []).map(formatRowClient).join("\n");
         if (data.total === 0) {
-          tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-xs text-zinc-500 font-mono">No se encontraron registros en el CRM store con el filtro actual.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-xs text-zinc-500 font-mono">No se encontraron registros en el CRM store con el filtro actual.</td></tr>';
           updatePaginationUi(0, 0, 0, false);
           return;
         }
@@ -637,42 +723,6 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
       try { openInspector(JSON.parse(row.getAttribute("data-contact"))); } catch (e) { console.error(e); }
     }
 
-    function updateTaskManagerChart(throughputDelta, dlqDelta) {
-      throughputHistory.shift();
-      throughputHistory.push(throughputDelta);
-      dlqHistory.shift();
-      dlqHistory.push(dlqDelta);
-
-      const maxVal = Math.max(10, ...throughputHistory, ...dlqHistory);
-      const w = 600;
-      const h = 100;
-      const step = w / 59;
-
-      const tpPoints = throughputHistory.map((val, i) => {
-        const x = Math.round(i * step);
-        const y = Math.round(h - 4 - ((val / maxVal) * (h - 16)));
-        return x + "," + y;
-      }).join(" ");
-
-      const dlqPoints = dlqHistory.map((val, i) => {
-        const x = Math.round(i * step);
-        const y = Math.round(h - 4 - ((val / maxVal) * (h - 16)));
-        return x + "," + y;
-      }).join(" ");
-
-      const tpEl = document.getElementById("perfPolylineThroughput");
-      const dlqEl = document.getElementById("perfPolylineDlq");
-      if (tpEl) tpEl.setAttribute("points", tpPoints);
-      if (dlqEl) dlqEl.setAttribute("points", dlqPoints);
-
-      const indicator = document.getElementById("perfStatusIndicator");
-      if (indicator) {
-        if (throughputDelta > 0) { indicator.innerText = "INGESTANDO..."; indicator.className = "absolute top-1.5 right-3 text-[10px] font-mono text-emerald-400 font-bold animate-pulse"; }
-        else if (dlqDelta > 0) { indicator.innerText = "CUARENTENA ACTIVA"; indicator.className = "absolute top-1.5 right-3 text-[10px] font-mono text-rose-400 font-bold animate-pulse"; }
-        else { indicator.innerText = "EN ESPERA"; indicator.className = "absolute top-1.5 right-3 text-[10px] font-mono text-emerald-500 font-semibold"; }
-      }
-    }
-
     function applyStateToDom(s, stateChanged = false) {
       const isZero = s.totalSyncedContacts === 0 && s.extractedN === 0;
 
@@ -704,23 +754,7 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
       if (p3) p3.innerHTML = "Extracted: " + s.extractedN + " | Delivered: " + s.syncedS + " | Unchanged Skipped: " + s.skippedO + " | Held: " + s.dlqPendingE;
 
       renderPowerBiAnalytics(s);
-
-      // Task Manager velocity metrics
-      const tpDelta = Math.max(0, s.totalSyncedContacts - lastSyncedCount);
-      const dlqDelta = Math.max(0, s.dlqPendingE - lastDlqPending);
-      const fixDelta = Math.max(0, s.dlqResolved - lastDlqResolved);
-      lastSyncedCount = s.totalSyncedContacts;
-      lastDlqPending = s.dlqPendingE;
-      lastDlqResolved = s.dlqResolved;
-
-      const perfTp = document.getElementById("perfThroughputVal");
-      if (perfTp) perfTp.innerText = tpDelta > 0 ? (tpDelta * 2).toLocaleString("en-US") + " rec/s" : "0 rec/s";
-      const perfDlq = document.getElementById("perfDlqVal");
-      if (perfDlq) perfDlq.innerText = dlqDelta > 0 ? (dlqDelta * 2) + " err/s" : "0 err/s";
-      const perfFix = document.getElementById("perfHealedVal");
-      if (perfFix) perfFix.innerText = fixDelta > 0 ? (fixDelta * 2) + " fix/s" : "0 fix/s";
-
-      updateTaskManagerChart(tpDelta, dlqDelta);
+      renderAreaChart(s);
 
       currentLiveState = s;
       if (stateChanged && activeTab !== "health") {

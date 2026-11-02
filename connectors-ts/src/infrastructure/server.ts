@@ -30,6 +30,13 @@ function findRepoRoot(): string {
   return fs.existsSync(path.join(cur, "syncs")) ? cur : process.cwd();
 }
 
+function wipeDuckDbFiles(): void {
+  const root = findRepoRoot();
+  for (const f of ["local_warehouse.duckdb", "local_warehouse.duckdb.wal"]) {
+    try { const p = path.join(root, "data", f); if (fs.existsSync(p)) fs.unlinkSync(p); } catch {}
+  }
+}
+
 function runPythonCli(args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
     const root = findRepoRoot();
@@ -255,7 +262,8 @@ export function createConnectorServer(options: ConnectorServerOptions = {}): { s
     }
     if (method === "POST" && pathname === "/api/v1/reset") {
       store.reset();
-      sendJson(res, 200, { status: "[OK]", message: "CRM memory store reset", totalSyncedContacts: 0 });
+      wipeDuckDbFiles();
+      sendJson(res, 200, { status: "[OK]", message: "CRM memory store and DuckDB reset to Stage 0 Baseline", totalSyncedContacts: 0 });
       return;
     }
 
@@ -265,26 +273,14 @@ export function createConnectorServer(options: ConnectorServerOptions = {}): { s
         const phase = body.phase ?? "init";
         if (phase === "reset") {
           store.reset();
-          const root = findRepoRoot();
-          for (const f of ["local_warehouse.duckdb", "local_warehouse.duckdb.wal"]) {
-            try {
-              const p = path.join(root, "data", f);
-              if (fs.existsSync(p)) fs.unlinkSync(p);
-            } catch {}
-          }
+          wipeDuckDbFiles();
           sendJson(res, 200, { ok: true, phase, state: store.getState(), consoleOutput: "[OK] Reset to Stage 0 Baseline." });
           return;
         }
         if (phase === "sync") {
-          const root = findRepoRoot();
-          const dbPath = path.join(root, "data", "local_warehouse.duckdb");
+          const dbPath = path.join(findRepoRoot(), "data", "local_warehouse.duckdb");
           if (!fs.existsSync(dbPath) || store.getState().totalSyncedContacts === 0) {
-            for (const f of ["local_warehouse.duckdb", "local_warehouse.duckdb.wal"]) {
-              try {
-                const p = path.join(root, "data", f);
-                if (fs.existsSync(p)) fs.unlinkSync(p);
-              } catch {}
-            }
+            wipeDuckDbFiles();
             await runPythonCli(["init", "--rows", "10000"]);
           }
           const result = await runPythonCli(["run", "--manifest", "syncs/hubspot_profitability.yml"]);
