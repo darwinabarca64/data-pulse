@@ -104,6 +104,18 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
     })
     .join("\n");
 
+  const syncedTrendBadge = state.totalSyncedContacts >= 10000
+    ? `<span class="inline-flex items-center font-medium text-emerald-600 dark:text-emerald-400"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>100% Complete</span>`
+    : state.totalSyncedContacts >= 9800
+      ? `<span class="inline-flex items-center font-medium text-emerald-600 dark:text-emerald-400"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>+98.0% First Pass</span>`
+      : state.extractedN >= 10000
+        ? `<span class="inline-flex items-center font-medium text-blue-600 dark:text-blue-400"><span class="w-1.5 h-1.5 rounded-full bg-blue-500 mr-1.5 animate-pulse"></span>10k in Warehouse (Ready to Sync)</span>`
+        : `<span class="inline-flex items-center font-medium text-zinc-500"><span class="w-1.5 h-1.5 rounded-full bg-zinc-400 mr-1.5"></span>Awaiting Sync</span>`;
+
+  const emptyTableHtml = state.extractedN >= 10000
+    ? `<tr><td colspan="8" class="p-10 text-center text-xs text-zinc-500 font-mono"><div class="space-y-1.5"><span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20"><span class="w-2 h-2 rounded-full bg-blue-500 mr-1.5 animate-pulse"></span>STAGE 1: 10,000 Source Records Seeded in Warehouse</span><p class="text-zinc-600 dark:text-zinc-400">9,800 Clean &bull; 150 Email Anomalies &bull; 50 NaN Anomalies prepared in DuckDB/Snowflake.</p><p class="text-zinc-500 text-[11px]">Ready for Step 2: Run <code class="px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-bold">datapulse run</code> to stream batches into CRM!</p></div></td></tr>`
+    : `<tr><td colspan="8" class="p-12 text-center text-xs text-zinc-500 font-mono">Stage 0 Baseline: 0 Contacts in CRM. Ingestion pipeline is idle. Run datapulse init &amp; datapulse run to stream batches...</td></tr>`;
+
   const dlqDotColor = state.dlqPendingE > 0 ? "bg-rose-500" : "bg-emerald-500";
   const dlqStatusBadge = state.dlqPendingE > 0
     ? `<span class="inline-flex items-center text-xs font-medium text-rose-600 dark:text-rose-400"><span class="w-1.5 h-1.5 rounded-full bg-rose-500 mr-1.5"></span>Danger: ${state.emailErrorsPending || 150} Email, ${state.nanErrorsPending || 50} NaN Held</span>`
@@ -249,8 +261,8 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
           </div>
           <div class="mt-3">
             <div class="text-3xl font-bold tracking-tight text-zinc-950 dark:text-zinc-50" id="kpi-synced">${state.totalSyncedContacts.toLocaleString("en-US")}</div>
-            <div class="flex items-center gap-1.5 mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-              <span class="inline-flex items-center font-medium ${state.totalSyncedContacts > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-500"}"><span class="w-1.5 h-1.5 rounded-full ${state.totalSyncedContacts > 0 ? "bg-emerald-500" : "bg-zinc-400"} mr-1.5"></span>${state.totalSyncedContacts >= 10000 ? "100% Complete" : state.totalSyncedContacts >= 9800 ? "+98.0% First Pass" : "Awaiting Sync"}</span><span>&bull; Zero row loss</span>
+            <div class="flex items-center gap-1.5 mt-2 text-xs text-zinc-500 dark:text-zinc-400" id="kpi-synced-trend">
+              ${syncedTrendBadge}<span>&bull; Zero row loss</span>
             </div>
           </div>
         </div>
@@ -472,7 +484,7 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
               </tr>
             </thead>
             <tbody id="contactsBody" class="divide-y divide-zinc-200/60 dark:divide-zinc-800/60">
-              ${rowsHtml || '<tr><td colspan="8" class="p-12 text-center text-xs text-zinc-500 font-mono">Stage 0 Baseline: 0 Contacts in CRM. Ingestion pipeline is idle. Run datapulse sync to stream records...</td></tr>'}
+              ${rowsHtml || emptyTableHtml}
             </tbody>
           </table>
         </div>
@@ -763,6 +775,11 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
           dlqTrend.innerHTML = s.dlqPendingE > 0
             ? '<span class="inline-flex items-center text-xs font-medium text-rose-600 dark:text-rose-400"><span class="w-1.5 h-1.5 rounded-full bg-rose-500 mr-1.5"></span>Danger: ' + (s.emailErrorsPending || 150) + ' Email, ' + (s.nanErrorsPending || 50) + ' NaN Held</span>'
             : '<span class="inline-flex items-center text-xs font-medium text-emerald-600 dark:text-emerald-400"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>Healthy: 0 Held / ' + s.dlqResolved + ' Repaired</span>';
+        }
+        const synTrend = document.getElementById("kpi-synced-trend");
+        if (synTrend) {
+          const pill = s.totalSyncedContacts >= 10000 ? '<span class="inline-flex items-center font-medium text-emerald-600 dark:text-emerald-400"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>100% Complete</span>' : s.totalSyncedContacts >= 9800 ? '<span class="inline-flex items-center font-medium text-emerald-600 dark:text-emerald-400"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>+98.0% First Pass</span>' : s.extractedN >= 10000 ? '<span class="inline-flex items-center font-medium text-blue-600 dark:text-blue-400"><span class="w-1.5 h-1.5 rounded-full bg-blue-500 mr-1.5 animate-pulse"></span>10k in Warehouse (Ready to Sync)</span>' : '<span class="inline-flex items-center font-medium text-zinc-500"><span class="w-1.5 h-1.5 rounded-full bg-zinc-400 mr-1.5"></span>Awaiting Sync</span>';
+          synTrend.innerHTML = pill + '<span>&bull; Zero row loss</span>';
         }
         const summary = document.getElementById("chartStateSummary");
         if (summary) {
