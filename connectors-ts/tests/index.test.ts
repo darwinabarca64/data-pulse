@@ -155,7 +155,7 @@ describe("Step 5: TypeScript Connector Domain, Resilience & HTTP Server", () => 
       const dashResp = await fetch(`${baseUrl}/`);
       expect(dashResp.status).toBe(200);
       const html = await dashResp.text();
-      expect(html).toContain("DataPulse Reverse ETL");
+      expect(html).toContain("Data Pulse");
       expect(html).toContain("Pillar 1: Warehouse &amp; FinOps Guardrails");
       expect(html).toContain("Pillar 2: Apache Airflow Thin DAG");
       expect(html).toContain("Pillar 3: Data Delivery Balance");

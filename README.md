@@ -225,34 +225,50 @@ Use **Mode 2** to operate the pipeline like an SRE on call and watch the live Se
 | **Step D** | Run `datapulse dlq replay` (Surgical Auto-Remediation & Replay) | **`10,000`** | **`60`** | **`100`** (`+2` batches) | **`0`** | **`200`** |
 | **Step E** | Run `datapulse run --no-seed` (Idempotent 2nd run via `SHA-256`) | **`10,000`** | **`60`** | **`100`** (`+0` batches) | **`0`** | **`200`** |
 
-#### Terminal 1: Start the Live TypeScript CRM Connector & SSR Dashboard (`:3000`)
+#### Terminal 1: Start the Live TypeScript CRM Connector & Dashboard (`:3000`)
 
 ```bash
 cd connectors-ts
-npm install
 npm start
-# Open http://localhost:3000 in your browser (shows 0 Synced Contacts initially)
+# Open http://localhost:3000 in your browser (shows 0 Synced Contacts initially in Permanent Light Mode)
 ```
 
 #### Terminal 2: Execute Steps A, B, C, D, and E via the Universal `datapulse` CLI
 
-```bash
+*Windows PowerShell:*
+```powershell
 # STEP A: Reset connector memory and seed 10,000 deterministic rows (9,800 clean, 150 bad email, 50 NaN)
-curl -s -X POST http://localhost:3000/api/v1/reset
+curl.exe -s -X POST http://localhost:3000/api/v1/reset
+$env:PYTHONPATH="core-engine/src"
 python -m datapulse.interfaces.cli init --rows 10000 --db-path data/local_warehouse.duckdb
 
 # STEP B: Run initial sync over live HTTP (9,800 synced in 98 batches, 200 quarantined to DLQ)
-# -> Refresh http://localhost:3000 (F5) to see 9,800 Contacts & 60 VIP Margin Alerts!
+# Live Dashboard updates automatically every 1.5s (no F5 required)
+$env:PYTHONPATH="core-engine/src"
 python -m datapulse.interfaces.cli run --manifest syncs/hubspot_profitability.yml --db-path data/local_warehouse.duckdb
 
-# STEP C: Run Out-of-Band AI DLQ Doctor (groups 150 INVALID_EMAIL_FORMAT & 50 IEEE_754_NAN_INFINITY with PII redacted)
+# STEP C: Run Out-of-Band AI DLQ Doctor (groups 150 INVALID_EMAIL_FORMAT & 50 IEEE_754_NAN_INFINITY)
+$env:PYTHONPATH="core-engine/src"
 python -m datapulse.interfaces.cli dlq inspect --sync-id hubspot_customer_profitability --db-path data/local_warehouse.duckdb
 
 # STEP D: Execute Surgical DLQ Auto-Remediation & Replay (+2 HTTP batches -> 10,000/10,000 Contacts, 0 Pending DLQ)
-# -> Refresh http://localhost:3000 (F5) to see 10,000 Contacts & 100 HTTP Batches!
+$env:PYTHONPATH="core-engine/src"
 python -m datapulse.interfaces.cli dlq replay --manifest syncs/hubspot_profitability.yml --db-path data/local_warehouse.duckdb
 
 # STEP E: Run idempotent 2nd sync (--no-seed) -> 10,000 Skipped via SHA-256 Hash Diffing, 0 HTTP Calls!
+$env:PYTHONPATH="core-engine/src"
+python -m datapulse.interfaces.cli run --manifest syncs/hubspot_profitability.yml --no-seed --db-path data/local_warehouse.duckdb
+```
+
+*Linux / macOS (Bash):*
+```bash
+# Set PYTHONPATH and run all steps:
+export PYTHONPATH="core-engine/src"
+curl -s -X POST http://localhost:3000/api/v1/reset
+python -m datapulse.interfaces.cli init --rows 10000 --db-path data/local_warehouse.duckdb
+python -m datapulse.interfaces.cli run --manifest syncs/hubspot_profitability.yml --db-path data/local_warehouse.duckdb
+python -m datapulse.interfaces.cli dlq inspect --sync-id hubspot_customer_profitability --db-path data/local_warehouse.duckdb
+python -m datapulse.interfaces.cli dlq replay --manifest syncs/hubspot_profitability.yml --db-path data/local_warehouse.duckdb
 python -m datapulse.interfaces.cli run --manifest syncs/hubspot_profitability.yml --no-seed --db-path data/local_warehouse.duckdb
 ```
 

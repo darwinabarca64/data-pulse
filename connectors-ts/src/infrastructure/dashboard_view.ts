@@ -62,16 +62,16 @@ export interface CrmStoreState {
 }
 
 function escapeHtml(text: string): string {
-  return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return String(text ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 function formatRowSsr(c: NormalizedCrmContact): string {
   const isVip = Boolean(c.ai_executive_brief) || c.customer_tier.includes("VIP");
   const isHealed = c.remediated_from_dlq || (c.customer_id >= "CUST-09801");
-  const statusPill = isVip ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200"><span class="w-1.5 h-1.5 rounded-full bg-rose-500 mr-1.5"></span>VIP At Risk</span>' : isHealed ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>Auto-Repaired</span>' : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>Delivered</span>';
+  const statusPill = isVip ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200"><span class="w-1.5 h-1.5 rounded-full bg-rose-600 mr-1.5"></span>VIP At Risk</span>' : isHealed ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>Auto-Repaired</span>' : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>Delivered</span>';
   const briefCell = c.ai_executive_brief ? `<div class="flex items-center gap-1.5"><span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 shrink-0">[VIP-BRIEF]</span><span class="text-xs text-zinc-700 truncate max-w-xs" title="${escapeHtml(c.ai_executive_brief)}">${escapeHtml(c.ai_executive_brief)}</span></div>` : isHealed ? '<span class="text-xs text-zinc-500">Remediated via AI DLQ Doctor (RFC-5322 regex / coalesce)</span>' : '<span class="text-xs text-zinc-400">Standard Margin Profile - Normal Rhythm</span>';
   const marginBadge = `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold ${c.profit_margin_pct < 0 ? "bg-rose-50 text-rose-700 border border-rose-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"}">${c.profit_margin_pct < 0 ? "" : "+"}${c.profit_margin_pct.toFixed(1)}%</span>`;
-  const tierBadge = `<span class="px-2 py-0.5 rounded text-xs font-medium ${isVip ? "bg-purple-50 text-purple-700 border border-purple-200" : "bg-zinc-100 text-zinc-700 border border-zinc-200"}">${escapeHtml(c.customer_tier)}</span>`;
+  const tierBadge = `<span class="px-2 py-0.5 rounded text-xs font-medium ${isVip ? "bg-rose-50 text-rose-700 border border-rose-200" : "bg-zinc-100 text-zinc-700 border border-zinc-200"}">${escapeHtml(c.customer_tier)}</span>`;
   const safeJson = escapeHtml(JSON.stringify(c));
   return `<tr class="customer-row border-b border-zinc-200 hover:bg-zinc-50/80 transition-colors cursor-pointer" data-contact="${safeJson}" onclick="openInspectorFromRow(this)"><td class="p-3"><div class="flex items-center gap-2"><span class="font-medium text-xs text-zinc-950 font-mono">${escapeHtml(c.customer_id)}</span><span class="px-1.5 py-0.2 rounded text-[10px] font-mono bg-zinc-100 text-zinc-600 border border-zinc-200">${escapeHtml(c.country || "US")}</span></div><div class="text-[11px] text-zinc-500">${escapeHtml(c.company || "Enterprise Account")} • <span class="font-mono">${escapeHtml(c.email)}</span></div></td><td class="p-3">${tierBadge}</td><td class="p-3">${statusPill}</td><td class="p-3 font-mono text-xs font-semibold text-zinc-950">$${c.net_profitability_usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td><td class="p-3">${marginBadge}</td><td class="p-3">${briefCell}</td><td class="p-3 text-right"><button type="button" class="btn-inspect px-2.5 py-1 rounded text-xs font-medium border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100 transition" onclick="event.stopPropagation(); openInspectorFromRow(this.closest('tr'))">Inspect</button></td></tr>`;
 }
@@ -85,12 +85,19 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
   const isZero = state.totalSyncedContacts === 0 && state.extractedN === 0;
   const initialStateJson = escapeHtml(JSON.stringify(state));
 
-  const syncedTrendHtml = isZero ? '<span class="inline-flex items-center font-medium text-zinc-500"><span class="w-1.5 h-1.5 rounded-full bg-zinc-400 mr-1.5"></span>Standby • Awaiting Sync</span>' : state.totalSyncedContacts >= 10000 ? '<span class="inline-flex items-center font-medium text-emerald-600"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>100% Complete • Zero row loss</span>' : state.totalSyncedContacts >= 9800 ? '<span class="inline-flex items-center font-medium text-emerald-600"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>+98.0% First Pass • 200 Held in DLQ</span>' : '<span class="inline-flex items-center font-medium text-blue-600"><span class="w-1.5 h-1.5 rounded-full bg-blue-500 mr-1.5 animate-pulse"></span>10k in Warehouse • Ready to Sync</span>';
-  const vipTrendHtml = isZero || state.vipBriefCount === 0 ? '<span class="inline-flex items-center font-medium text-zinc-500"><span class="w-1.5 h-1.5 rounded-full bg-zinc-400 mr-1.5"></span>0 Alerts • Normal Margin Profile</span>' : '<span class="inline-flex items-center font-medium text-rose-600"><span class="w-1.5 h-1.5 rounded-full bg-rose-500 mr-1.5"></span>-20.0% Margin Drop • Executive retention call</span>';
-  const dlqDotColor = isZero ? "bg-zinc-400" : state.dlqPendingE > 0 ? "bg-rose-500" : state.dlqResolved > 0 ? "bg-amber-500" : "bg-emerald-500";
-  const dlqTrendHtml = isZero ? '<span class="inline-flex items-center text-xs font-medium text-zinc-500"><span class="w-1.5 h-1.5 rounded-full bg-zinc-400 mr-1.5"></span>Standby: 0 Anomalies Held</span>' : state.dlqPendingE > 0 ? `<span class="inline-flex items-center text-xs font-medium text-rose-600"><span class="w-1.5 h-1.5 rounded-full bg-rose-500 mr-1.5"></span>Danger: ${state.emailErrorsPending || 150} Email, ${state.nanErrorsPending || 50} NaN Held</span>` : `<span class="inline-flex items-center text-xs font-medium text-emerald-600"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>Healthy: 0 Held / ${state.dlqResolved} Repaired</span>`;
+  const syncedTrendHtml = isZero ? '<span class="inline-flex items-center font-medium text-zinc-500"><span class="w-1.5 h-1.5 rounded-full bg-zinc-400 mr-1.5"></span>Standby • Awaiting Sync</span>' : state.totalSyncedContacts >= 10000 ? '<span class="inline-flex items-center font-medium text-emerald-700"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>100% Complete • Zero row loss</span>' : state.totalSyncedContacts >= 9800 ? '<span class="inline-flex items-center font-medium text-emerald-700"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>+98.0% First Pass • 200 Held in DLQ</span>' : '<span class="inline-flex items-center font-medium text-amber-700"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5 animate-pulse"></span>10k in Warehouse • Ready to Sync</span>';
+  const vipTrendHtml = isZero || state.vipBriefCount === 0 ? '<span class="inline-flex items-center font-medium text-zinc-500"><span class="w-1.5 h-1.5 rounded-full bg-zinc-400 mr-1.5"></span>0 Alerts • Normal Margin Profile</span>' : '<span class="inline-flex items-center font-medium text-rose-700"><span class="w-1.5 h-1.5 rounded-full bg-rose-600 mr-1.5"></span>-20.0% Margin Drop • Executive retention call</span>';
+  const dlqDotColor = isZero ? "bg-zinc-400" : state.dlqPendingE > 0 ? "bg-rose-600" : state.dlqResolved > 0 ? "bg-amber-500" : "bg-emerald-600";
+  const dlqTrendHtml = isZero ? '<span class="inline-flex items-center text-xs font-medium text-zinc-500"><span class="w-1.5 h-1.5 rounded-full bg-zinc-400 mr-1.5"></span>Standby: 0 Anomalies Held</span>' : state.dlqPendingE > 0 ? `<span class="inline-flex items-center text-xs font-medium text-rose-700"><span class="w-1.5 h-1.5 rounded-full bg-rose-600 mr-1.5"></span>Danger: ${state.emailErrorsPending || 150} Email, ${state.nanErrorsPending || 50} NaN Held</span>` : `<span class="inline-flex items-center text-xs font-medium text-emerald-700"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>Healthy: 0 Held / ${state.dlqResolved} Repaired</span>`;
   const savingsValue = isZero ? "$0.00" : `$${state.annualSaasSavingsUsd.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
-  const savingsTrendHtml = isZero ? '<span class="inline-flex items-center font-medium text-zinc-500"><span class="w-1.5 h-1.5 rounded-full bg-zinc-400 mr-1.5"></span>Standby • $4,170/yr projected on active sync</span>' : '<span class="inline-flex items-center font-medium text-emerald-600"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>99.3% Cost Reduction • $2.50/mo vs $4,200/yr</span>';
+  const savingsTrendHtml = isZero ? '<span class="inline-flex items-center font-medium text-zinc-500"><span class="w-1.5 h-1.5 rounded-full bg-zinc-400 mr-1.5"></span>Standby • $4,170/yr projected on active sync</span>' : '<span class="inline-flex items-center font-medium text-emerald-700"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>99.3% Cost Reduction • $2.50/mo vs $4,200/yr</span>';
+
+  const triageBadgeText = isZero ? "Stage 0 Baseline" : state.dlqPendingE > 0 ? `${state.dlqPendingE} Pending Triage` : "100% Certified";
+  const triageBadgeClass = isZero ? "bg-zinc-100 text-zinc-600 border border-zinc-200" : state.dlqPendingE > 0 ? "bg-rose-50 text-rose-700 border border-rose-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200";
+  const triageEmailStatusText = isZero ? "Standby" : state.dlqPendingE > 0 ? `${state.emailErrorsPending || 150} Quarantined` : "150 Auto-Repaired";
+  const triageNanStatusText = isZero ? "Standby" : state.dlqPendingE > 0 ? `${state.nanErrorsPending || 50} Quarantined` : "50 Coalesced 0.0";
+  const triageActionText = isZero ? "Standby" : state.dlqPendingE > 0 ? "Surgical Replay Ready" : "DLQ Empty • Certified";
+  const ratioText = isZero ? "0 / 0 (0%)" : `${state.syncedS.toLocaleString("en-US")} / ${state.extractedN.toLocaleString("en-US")} (${Math.round((state.syncedS / Math.max(1, state.extractedN)) * 100)}%)`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -102,24 +109,25 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
   <style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap'); body { font-family: 'Inter', sans-serif; }</style>
 </head>
 <body class="bg-zinc-50 text-zinc-950 min-h-screen antialiased flex flex-col">
+  <!-- Top Bar: Data Pulse Executive Console -->
   <header class="border-b border-zinc-200 bg-white/90 backdrop-blur-md px-4 sm:px-6 py-3 flex flex-col xl:flex-row xl:items-center justify-between gap-3 sticky top-0 z-30 shadow-sm">
     <div class="flex items-center justify-between w-full xl:w-auto">
       <div class="flex items-center gap-3">
         <div class="flex aspect-square size-9 items-center justify-center rounded-lg bg-zinc-950 text-white shadow-sm"><svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-8 4.5v9L12 21l8-4.5v-9L12 3Z"/><path d="M12 12 4 7.5"/><path d="m12 12 8-4.5"/><path d="M12 12v9"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg></div>
-        <div class="flex flex-col"><div class="flex items-center gap-2"><span class="text-sm font-bold tracking-tight text-zinc-950">DataPulse Reverse ETL</span><button type="button" class="info-btn text-zinc-400 hover:text-zinc-900 transition p-0.5" onclick="openInfoPopover('overview')"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button></div><div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span><span class="text-[11px] text-zinc-500 font-mono" id="sidebarEngine">Engine: DuckDB Local • 10k Mart</span></div></div>
+        <div class="flex flex-col"><div class="flex items-center gap-2"><span class="text-sm font-bold tracking-tight text-zinc-950">Data Pulse</span><button type="button" class="info-btn text-zinc-400 hover:text-zinc-900 transition p-0.5" onclick="openInfoPopover('overview')"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button></div><div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span><span class="text-[11px] text-zinc-500 font-mono" id="sidebarEngine">Engine: DuckDB Local • 10k Mart</span></div></div>
       </div>
     </div>
     <div class="flex items-center gap-1.5 p-1 rounded-lg border border-zinc-200 bg-zinc-50 text-xs flex-wrap w-full xl:w-auto">
-      <button type="button" id="btnRunSync" onclick="triggerPipelinePhase('sync', this)" class="pipeline-step-btn px-3 py-1.5 rounded-md font-medium text-zinc-700 hover:bg-zinc-200 hover:text-zinc-950 transition flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-blue-500"></span>1. Run Initial Sync (10k)</button>
+      <button type="button" id="btnRunSync" onclick="triggerPipelinePhase('sync', this)" class="pipeline-step-btn px-3 py-1.5 rounded-md font-medium text-zinc-700 hover:bg-zinc-200 hover:text-zinc-950 transition flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-600"></span>1. Run Initial Sync (10k)</button>
       <button type="button" id="btnRunRepair" onclick="triggerPipelinePhase('replay', this)" class="pipeline-step-btn px-3 py-1.5 rounded-md font-medium text-zinc-700 hover:bg-zinc-200 hover:text-zinc-950 transition flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-amber-500"></span>2. AI Diagnose &amp; Repair (200)</button>
-      <button type="button" id="btnRunIdemp" onclick="triggerPipelinePhase('idempotent', this)" class="pipeline-step-btn px-3 py-1.5 rounded-md font-medium text-zinc-700 hover:bg-zinc-200 hover:text-zinc-950 transition flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-500"></span>3. Verify SHA-256 Cache</button>
+      <button type="button" id="btnRunIdemp" onclick="triggerPipelinePhase('idempotent', this)" class="pipeline-step-btn px-3 py-1.5 rounded-md font-medium text-zinc-700 hover:bg-zinc-200 hover:text-zinc-950 transition flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-600"></span>3. Verify SHA-256 Cache</button>
       <button type="button" id="btnResetZero" onclick="triggerPipelinePhase('reset', this)" class="pipeline-step-btn px-3 py-1.5 rounded-md font-medium text-rose-600 hover:bg-rose-50 transition">Reset to 0</button>
       <span id="pipelineSpinner" class="hidden text-zinc-500 font-mono text-[11px] animate-pulse px-1">Running Python Engine...</span>
     </div>
     <div class="flex items-center gap-2 flex-wrap w-full xl:w-auto justify-between xl:justify-end">
-      <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono font-medium bg-blue-50 text-blue-700 border border-blue-200" id="phase-banner"><span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>${escapeHtml(state.currentPhase)}</div>
-      <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200" id="connPill"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500" id="connDot"></span><span id="connText">Connector Online</span></div>
-      <button id="togglePollingBtn" type="button" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100 transition"><span class="w-2 h-2 rounded-full bg-emerald-500" id="pollingDot"></span><span id="pollingStatusText">Auto-Refresh (2s)</span></button>
+      <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono font-medium bg-emerald-50 text-emerald-700 border border-emerald-200" id="phase-banner"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>${escapeHtml(state.currentPhase)}</div>
+      <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200" id="connPill"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600" id="connDot"></span><span id="connText">Connector Online</span></div>
+      <button id="togglePollingBtn" type="button" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100 transition"><span class="w-2 h-2 rounded-full bg-emerald-600" id="pollingDot"></span><span id="pollingStatusText">Auto-Refresh (1.5s)</span></button>
     </div>
   </header>
 
@@ -144,38 +152,69 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
       </div>
     </section>
 
+    <!-- Task Manager Style Live Performance Engine Chart -->
+    <section class="rounded-xl border border-zinc-200 bg-white p-4 sm:p-5 shadow-sm" id="taskManagerSection">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-zinc-100 gap-2">
+        <div class="flex items-center gap-2.5">
+          <div class="w-7 h-7 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-xs"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+          <div><h2 class="text-sm font-bold text-zinc-950">Rendimiento del Motor en Tiempo Real</h2><p class="text-xs text-zinc-500">Telemetria de velocidad de ingesta, latencia de lotes y utilizacion de memoria (estilo Task Manager)</p></div>
+        </div>
+        <div class="flex items-center gap-4 text-xs font-mono flex-wrap">
+          <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-emerald-600"></span><span class="text-zinc-600">Ingesta:</span> <span id="perfThroughputVal" class="font-bold text-emerald-700">0 rec/s</span></div>
+          <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-rose-600"></span><span class="text-zinc-600">DLQ:</span> <span id="perfDlqVal" class="font-bold text-rose-700">0 err/s</span></div>
+          <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-amber-500"></span><span class="text-zinc-600">Reparados:</span> <span id="perfHealedVal" class="font-bold text-amber-700">0 fix/s</span></div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 my-3 text-xs font-mono">
+        <div class="p-2.5 rounded-lg bg-zinc-50 border border-zinc-200"><div class="text-[10px] uppercase text-zinc-400">Velocidad Pico</div><div class="text-base font-bold text-emerald-700" id="hudPeakSpeed">${isZero ? "0 rec/s" : "1,250 rec/s"}</div></div>
+        <div class="p-2.5 rounded-lg bg-zinc-50 border border-zinc-200"><div class="text-[10px] uppercase text-zinc-400">Latencia Lote (100)</div><div class="text-base font-bold text-zinc-900" id="hudBatchLatency">&lt; 8.2 ms</div></div>
+        <div class="p-2.5 rounded-lg bg-zinc-50 border border-zinc-200"><div class="text-[10px] uppercase text-zinc-400">Parse DAG SLA</div><div class="text-base font-bold text-emerald-700">&lt; 0.05 s</div></div>
+        <div class="p-2.5 rounded-lg bg-zinc-50 border border-zinc-200"><div class="text-[10px] uppercase text-zinc-400">Memoria Heap (O(1))</div><div class="text-base font-bold text-zinc-900" id="hudMemoryHeap">18.4 MB</div></div>
+      </div>
+
+      <div class="relative w-full h-28 bg-zinc-950 rounded-lg overflow-hidden border border-zinc-800 p-1">
+        <svg class="w-full h-full" id="perfSvgCanvas" viewBox="0 0 600 100" preserveAspectRatio="none">
+          <defs>
+            <pattern id="taskGrid" width="40" height="20" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 20" fill="none" stroke="#27272a" stroke-width="0.5"/></pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#taskGrid)"/>
+          <polyline id="perfPolylineThroughput" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="0,96 600,96"/>
+          <polyline id="perfPolylineDlq" fill="none" stroke="#e11d48" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="0,96 600,96"/>
+        </svg>
+        <div class="absolute bottom-1.5 left-3 text-[10px] font-mono text-zinc-500">60s ventana en vivo • Monitor O(1)</div>
+        <div class="absolute top-1.5 right-3 text-[10px] font-mono text-emerald-500 font-semibold" id="perfStatusIndicator">EN ESPERA</div>
+      </div>
+    </section>
+
     <!-- 2-Column Interactive Power BI Analytics Grid -->
     <section class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5" id="powerBiAnalyticsGrid">
-      <!-- Left Card: Net Profit & Revenue by Customer Segment (Cross-Filter Bar Chart) -->
+      <!-- Left Card: Net Profit & Revenue by Customer Segment -->
       <div class="rounded-xl border border-zinc-200 bg-white p-4 sm:p-5 shadow-sm flex flex-col justify-between">
         <div>
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-zinc-100">
             <div><h2 class="text-sm font-semibold text-zinc-950">Net Profit &amp; Revenue by Segment</h2><p class="text-xs text-zinc-500 mt-0.5">Click any segment bar to cross-filter the customer records table below.</p></div>
-            <button type="button" id="btnClearCrossFilter" onclick="clearSegmentFilter()" class="hidden self-start sm:self-auto px-2 py-0.5 rounded text-[11px] font-medium bg-zinc-100 text-zinc-700 hover:bg-zinc-200 transition">Clear Filter</button>
+            <button type="button" id="btnClearCrossFilter" onclick="clearSegmentFilter()" class="hidden self-start sm:self-auto px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition">Clear Filter</button>
           </div>
           <div class="space-y-3.5 mt-4" id="segmentBarsContainer">
-            <!-- Enterprise VIP -->
             <div class="segment-bar-row p-2.5 rounded-lg border border-zinc-200 hover:border-zinc-400 transition cursor-pointer" onclick="toggleSegmentFilter('ENTERPRISE_VIP')" id="barRow_ENTERPRISE_VIP">
-              <div class="flex items-center justify-between text-xs font-medium"><span class="text-zinc-900 font-semibold flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-rose-500"></span>Enterprise VIP</span><span class="font-mono text-rose-600" id="segNet_ENTERPRISE_VIP">Net: -$0.00 (-20.0% Risk)</span></div>
-              <div class="w-full bg-zinc-100 h-2 rounded-full mt-2 overflow-hidden"><div class="bg-rose-500 h-full rounded-full transition-all duration-500" id="barFill_ENTERPRISE_VIP" style="width: 0%"></div></div>
+              <div class="flex items-center justify-between text-xs font-medium"><span class="text-zinc-900 font-semibold flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-rose-600"></span>Enterprise VIP</span><span class="font-mono text-rose-700" id="segNet_ENTERPRISE_VIP">${isZero ? "Net: $0.00" : `Net: -$${Math.abs(state.segmentBreakdown?.ENTERPRISE_VIP?.net_profitability_usd || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })} (-20.0% Risk)`}</span></div>
+              <div class="w-full bg-zinc-100 h-2 rounded-full mt-2 overflow-hidden"><div class="bg-rose-600 h-full rounded-full transition-all duration-500" id="barFill_ENTERPRISE_VIP" style="width: 0%"></div></div>
               <div class="flex items-center justify-between text-[11px] text-zinc-500 mt-1 font-mono"><span id="segCount_ENTERPRISE_VIP">0 accounts</span><span id="segRev_ENTERPRISE_VIP">Rev: $0.00</span></div>
             </div>
-            <!-- Enterprise -->
             <div class="segment-bar-row p-2.5 rounded-lg border border-zinc-200 hover:border-zinc-400 transition cursor-pointer" onclick="toggleSegmentFilter('ENTERPRISE')" id="barRow_ENTERPRISE">
-              <div class="flex items-center justify-between text-xs font-medium"><span class="text-zinc-900 font-semibold flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-500"></span>Enterprise</span><span class="font-mono text-emerald-600" id="segNet_ENTERPRISE">Net: +$0.00</span></div>
-              <div class="w-full bg-zinc-100 h-2 rounded-full mt-2 overflow-hidden"><div class="bg-emerald-500 h-full rounded-full transition-all duration-500" id="barFill_ENTERPRISE" style="width: 0%"></div></div>
+              <div class="flex items-center justify-between text-xs font-medium"><span class="text-zinc-900 font-semibold flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-600"></span>Enterprise</span><span class="font-mono text-emerald-700" id="segNet_ENTERPRISE">Net: +$0.00</span></div>
+              <div class="w-full bg-zinc-100 h-2 rounded-full mt-2 overflow-hidden"><div class="bg-emerald-600 h-full rounded-full transition-all duration-500" id="barFill_ENTERPRISE" style="width: 0%"></div></div>
               <div class="flex items-center justify-between text-[11px] text-zinc-500 mt-1 font-mono"><span id="segCount_ENTERPRISE">0 accounts</span><span id="segRev_ENTERPRISE">Rev: $0.00</span></div>
             </div>
-            <!-- Mid Market -->
             <div class="segment-bar-row p-2.5 rounded-lg border border-zinc-200 hover:border-zinc-400 transition cursor-pointer" onclick="toggleSegmentFilter('MID_MARKET')" id="barRow_MID_MARKET">
-              <div class="flex items-center justify-between text-xs font-medium"><span class="text-zinc-900 font-semibold flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-500"></span>Mid-Market</span><span class="font-mono text-emerald-600" id="segNet_MID_MARKET">Net: +$0.00</span></div>
-              <div class="w-full bg-zinc-100 h-2 rounded-full mt-2 overflow-hidden"><div class="bg-emerald-500 h-full rounded-full transition-all duration-500" id="barFill_MID_MARKET" style="width: 0%"></div></div>
+              <div class="flex items-center justify-between text-xs font-medium"><span class="text-zinc-900 font-semibold flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-600"></span>Mid-Market</span><span class="font-mono text-emerald-700" id="segNet_MID_MARKET">Net: +$0.00</span></div>
+              <div class="w-full bg-zinc-100 h-2 rounded-full mt-2 overflow-hidden"><div class="bg-emerald-600 h-full rounded-full transition-all duration-500" id="barFill_MID_MARKET" style="width: 0%"></div></div>
               <div class="flex items-center justify-between text-[11px] text-zinc-500 mt-1 font-mono"><span id="segCount_MID_MARKET">0 accounts</span><span id="segRev_MID_MARKET">Rev: $0.00</span></div>
             </div>
-            <!-- SME -->
             <div class="segment-bar-row p-2.5 rounded-lg border border-zinc-200 hover:border-zinc-400 transition cursor-pointer" onclick="toggleSegmentFilter('SME')" id="barRow_SME">
-              <div class="flex items-center justify-between text-xs font-medium"><span class="text-zinc-900 font-semibold flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-500"></span>SME</span><span class="font-mono text-emerald-600" id="segNet_SME">Net: +$0.00</span></div>
-              <div class="w-full bg-zinc-100 h-2 rounded-full mt-2 overflow-hidden"><div class="bg-emerald-500 h-full rounded-full transition-all duration-500" id="barFill_SME" style="width: 0%"></div></div>
+              <div class="flex items-center justify-between text-xs font-medium"><span class="text-zinc-900 font-semibold flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-600"></span>SME</span><span class="font-mono text-emerald-700" id="segNet_SME">Net: +$0.00</span></div>
+              <div class="w-full bg-zinc-100 h-2 rounded-full mt-2 overflow-hidden"><div class="bg-emerald-600 h-full rounded-full transition-all duration-500" id="barFill_SME" style="width: 0%"></div></div>
               <div class="flex items-center justify-between text-[11px] text-zinc-500 mt-1 font-mono"><span id="segCount_SME">0 accounts</span><span id="segRev_SME">Rev: $0.00</span></div>
             </div>
           </div>
@@ -188,43 +227,38 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
         <div>
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-zinc-100">
             <div><h2 class="text-sm font-semibold text-zinc-950">Data Delivery &amp; Quarantine Triage</h2><p class="text-xs text-zinc-500 mt-0.5">Real-time row conservation and automated DLQ healing status.</p></div>
-            <span class="self-start sm:self-auto px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-emerald-50 text-emerald-700 border border-emerald-200" id="triageBadge">100% Certified</span>
+            <span class="self-start sm:self-auto px-2 py-0.5 rounded-full text-[10px] font-mono font-medium ${triageBadgeClass}" id="triageBadge">${triageBadgeText}</span>
           </div>
-          <!-- Stacked Progress Bar -->
           <div class="mt-4">
-            <div class="flex items-center justify-between text-xs font-medium mb-1.5">
-              <span class="text-zinc-700 font-semibold">Row Conservation Balance</span>
-              <span class="font-mono text-zinc-500 text-[11px]" id="conservationRatioText">10,000 / 10,000 (100%)</span>
-            </div>
+            <div class="flex items-center justify-between text-xs font-medium mb-1.5"><span class="text-zinc-700 font-semibold">Row Conservation Balance</span><span class="font-mono text-zinc-500 text-[11px]" id="conservationRatioText">${ratioText}</span></div>
             <div class="w-full bg-zinc-100 h-3 rounded-full overflow-hidden flex">
-              <div class="bg-emerald-500 h-full transition-all duration-500" id="progressClean" style="width: 0%"></div>
+              <div class="bg-emerald-600 h-full transition-all duration-500" id="progressClean" style="width: 0%"></div>
               <div class="bg-amber-500 h-full transition-all duration-500" id="progressRepaired" style="width: 0%"></div>
-              <div class="bg-rose-500 h-full transition-all duration-500" id="progressHeld" style="width: 0%"></div>
+              <div class="bg-rose-600 h-full transition-all duration-500" id="progressHeld" style="width: 0%"></div>
             </div>
             <div class="flex items-center justify-between text-[11px] font-mono text-zinc-500 mt-2 flex-wrap gap-2">
-              <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-500"></span>Clean: <span id="cleanDeliveredCount">0</span></span>
+              <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-600"></span>Clean: <span id="cleanDeliveredCount">0</span></span>
               <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-500"></span>Repaired: <span id="repairedCountProg">0</span></span>
-              <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-rose-500"></span>Held: <span id="heldCountProg">0</span></span>
+              <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-rose-600"></span>Held: <span id="heldCountProg">0</span></span>
             </div>
           </div>
-          <!-- Triage Checklist -->
           <div class="space-y-2.5 mt-4 text-xs font-mono">
             <div class="p-2.5 rounded-lg border border-zinc-200 bg-zinc-50/50">
-              <div class="flex items-center justify-between"><span class="text-zinc-900 font-semibold flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-rose-500"></span>1. Invalid Email Format (150 rows)</span><span class="text-zinc-500 text-[11px]" id="triageEmailStatus">Pending</span></div>
-              <div class="text-[11px] text-zinc-500 mt-1">CUST-09801..09950 • <code class="text-emerald-600">REGEXP_REPLACE(email, '@@', '@')</code></div>
+              <div class="flex items-center justify-between"><span class="text-zinc-900 font-semibold flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-rose-600"></span>1. Invalid Email Format (<span id="triageEmailCountText">${isZero ? 0 : state.emailErrorsPending || 150}</span> rows)</span><span class="text-zinc-500 text-[11px]" id="triageEmailStatus">${triageEmailStatusText}</span></div>
+              <div class="text-[11px] text-zinc-500 mt-1">CUST-09801..09950 • <code class="text-emerald-700 font-semibold">REGEXP_REPLACE(email, '@@', '@')</code></div>
             </div>
             <div class="p-2.5 rounded-lg border border-zinc-200 bg-zinc-50/50">
-              <div class="flex items-center justify-between"><span class="text-zinc-900 font-semibold flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-amber-500"></span>2. NaN Division by Zero (50 rows)</span><span class="text-zinc-500 text-[11px]" id="triageNanStatus">Pending</span></div>
-              <div class="text-[11px] text-zinc-500 mt-1">CUST-09951..10000 • <code class="text-emerald-600">COALESCE(NULLIF(margin, 'NaN'), 0.0)</code></div>
+              <div class="flex items-center justify-between"><span class="text-zinc-900 font-semibold flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-amber-500"></span>2. NaN Division by Zero (<span id="triageNanCountText">${isZero ? 0 : state.nanErrorsPending || 50}</span> rows)</span><span class="text-zinc-500 text-[11px]" id="triageNanStatus">${triageNanStatusText}</span></div>
+              <div class="text-[11px] text-zinc-500 mt-1">CUST-09951..10000 • <code class="text-emerald-700 font-semibold">COALESCE(NULLIF(margin, 'NaN'), 0.0)</code></div>
             </div>
           </div>
         </div>
         <div class="mt-4 pt-3 border-t border-zinc-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <button type="button" id="btnRepairNow" onclick="triggerPipelinePhase('replay', this)" class="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium transition flex items-center justify-center gap-1.5 shadow-sm">
+          <button type="button" id="btnRepairNow" onclick="triggerPipelinePhase('replay', this)" class="${isZero || state.dlqPendingE === 0 ? "hidden" : "px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium transition flex items-center justify-center gap-1.5 shadow-sm"}">
             <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 12 2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
             <span>Repair Held Records Now</span>
           </button>
-          <span class="text-xs font-mono text-zinc-500" id="triageActionStatus">Awaiting DLQ Replay</span>
+          <span class="text-xs font-mono text-zinc-500" id="triageActionStatus">${triageActionText}</span>
         </div>
       </div>
     </section>
@@ -234,12 +268,12 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
       <div class="p-3.5 sm:p-4 border-b border-zinc-200 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div class="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 w-full lg:w-auto scrollbar-none">
           <button type="button" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition bg-zinc-950 text-white shadow-sm shrink-0" data-tab="all">All Customers (<span id="tabCountAll">${state.totalSyncedContacts.toLocaleString("en-US")}</span>)</button>
-          <button type="button" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-600 hover:text-zinc-950 transition inline-flex items-center shrink-0" data-tab="vip"><span class="w-1.5 h-1.5 rounded-full bg-rose-500 mr-1.5"></span>VIP Retention Alerts (<span id="tabCountVip">${state.vipBriefCount}</span>)</button>
+          <button type="button" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-600 hover:text-zinc-950 transition inline-flex items-center shrink-0" data-tab="vip"><span class="w-1.5 h-1.5 rounded-full bg-rose-600 mr-1.5"></span>VIP Retention Alerts (<span id="tabCountVip">${state.vipBriefCount}</span>)</button>
           <button type="button" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-600 hover:text-zinc-950 transition inline-flex items-center shrink-0" data-tab="repaired"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>Repaired Records (<span id="tabCountRepaired">${state.dlqResolved}</span>)</button>
-          <button type="button" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-600 hover:text-zinc-950 transition inline-flex items-center shrink-0" data-tab="health"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>Pipeline &amp; Cloud Guardrails (4)</button>
+          <button type="button" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-600 hover:text-zinc-950 transition inline-flex items-center shrink-0" data-tab="health"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>Pipeline &amp; Cloud Guardrails (4)</button>
         </div>
         <div class="relative w-full lg:w-72" id="filterContainer">
-          <input type="search" id="filterInput" value="${escapeHtml(initialFilter)}" placeholder="Filter by ID, company, tier..." class="w-full px-3 py-1.5 pl-8 rounded-lg text-xs font-mono bg-zinc-50 border border-zinc-200 text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400" />
+          <input type="search" id="filterInput" value="${escapeHtml(initialFilter)}" placeholder="Filtrar por ID, empresa, tier..." class="w-full px-3 py-1.5 pl-8 rounded-lg text-xs font-mono bg-zinc-50 border border-zinc-200 text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400" />
           <svg class="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
         </div>
       </div>
@@ -281,10 +315,10 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
           <table class="w-full text-left border-collapse">
             <thead><tr class="border-b border-zinc-200 bg-zinc-50/70 text-[11px] font-mono uppercase text-zinc-500"><th class="p-3 font-medium">Architecture Pillar &amp; Component</th><th class="p-3 font-medium">Execution Engine &amp; SLA</th><th class="p-3 font-medium">Guardrail Policy &amp; Metrics</th><th class="p-3 font-medium">Operational Status</th></tr></thead>
             <tbody class="divide-y divide-zinc-200/70 text-xs">
-              <tr><td class="p-3 font-medium text-zinc-900"><div class="font-semibold text-zinc-950">Pillar 1: Warehouse &amp; FinOps Guardrails</div><div class="text-[11px] text-zinc-500 font-mono">Snowflake (WH_DATA_PULSE_XS) &amp; DuckDB Embedded</div></td><td class="p-3 font-mono text-zinc-700">AUTO_SUSPEND=60s • TIMEOUT=300s</td><td class="p-3 text-zinc-700">50 Credits ($150 Cap) • Cost: $2.50/mo vs $4,200/yr SaaS</td><td class="p-3"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>Active &amp; Guarded</span></td></tr>
-              <tr><td class="p-3 font-medium text-zinc-900"><div class="font-semibold text-zinc-950">Pillar 2: Apache Airflow Thin DAG</div><div class="text-[11px] text-zinc-500 font-mono">DAG ID: datapulse_hubspot_profitability_sync</div></td><td class="p-3 font-mono text-zinc-700">SLA: &lt;0.05s parse SLA</td><td class="p-3 text-zinc-700">3 Tasks: 1. validate_sync_manifest, 2. execute_incremental_reverse_etl, 3. audit_dlq_and_finops_telemetry</td><td class="p-3"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>Healthy (0 * * * *)</span></td></tr>
-              <tr><td class="p-3 font-medium text-zinc-900"><div class="font-semibold text-zinc-950">Pillar 3: Data Delivery Balance</div><div class="text-[11px] text-zinc-500 font-mono" id="pillar3BalanceText">Extracted: ${state.extractedN} | Delivered: ${state.syncedS} | Unchanged Skipped: ${state.skippedO} | Held: ${state.dlqPendingE}</div></td><td class="p-3 font-mono text-zinc-700">Out-of-Band Replay • Zero Impact on Sync SLA</td><td class="p-3 text-zinc-700">Auto-Remediates 150 Invalid Emails (RFC-5322 regex) &amp; 50 NaN Margin Records (coalesce to 0.0)</td><td class="p-3"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>Balanced &amp; Certified</span></td></tr>
-              <tr><td class="p-3 font-medium text-zinc-900"><div class="font-semibold text-zinc-950">Pillar 4 (HubSpot CRM v3 Store)</div><div class="text-[11px] text-zinc-500 font-mono">Batch Upsert Endpoint: /crm/v3/objects/contacts/batch/upsert</div></td><td class="p-3 font-mono text-zinc-700">100 records / batch • Token Bucket Rate Limiter</td><td class="p-3 text-zinc-700">HMAC-SHA256 Webhook Verification • 429 Retry Backoff (Full Jitter) • SHA-256 Idempotency Cache</td><td class="p-3"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>Connected &amp; Synced</span></td></tr>
+              <tr><td class="p-3 font-medium text-zinc-900"><div class="font-semibold text-zinc-950">Pillar 1: Warehouse &amp; FinOps Guardrails</div><div class="text-[11px] text-zinc-500 font-mono">Snowflake (WH_DATA_PULSE_XS) &amp; DuckDB Embedded</div></td><td class="p-3 font-mono text-zinc-700">AUTO_SUSPEND=60s • TIMEOUT=300s</td><td class="p-3 text-zinc-700">50 Credits ($150 Cap) • Cost: $2.50/mo vs $4,200/yr SaaS</td><td class="p-3"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>Active &amp; Guarded</span></td></tr>
+              <tr><td class="p-3 font-medium text-zinc-900"><div class="font-semibold text-zinc-950">Pillar 2: Apache Airflow Thin DAG</div><div class="text-[11px] text-zinc-500 font-mono">DAG ID: datapulse_hubspot_profitability_sync</div></td><td class="p-3 font-mono text-zinc-700">SLA: &lt;0.05s parse SLA</td><td class="p-3 text-zinc-700">3 Tasks: 1. validate_sync_manifest, 2. execute_incremental_reverse_etl, 3. audit_dlq_and_finops_telemetry</td><td class="p-3"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>Healthy (0 * * * *)</span></td></tr>
+              <tr><td class="p-3 font-medium text-zinc-900"><div class="font-semibold text-zinc-950">Pillar 3: Data Delivery Balance</div><div class="text-[11px] text-zinc-500 font-mono" id="pillar3BalanceText">Extracted: ${state.extractedN} | Delivered: ${state.syncedS} | Unchanged Skipped: ${state.skippedO} | Held: ${state.dlqPendingE}</div></td><td class="p-3 font-mono text-zinc-700">Out-of-Band Replay • Zero Impact on Sync SLA</td><td class="p-3 text-zinc-700">Auto-Remediates 150 Invalid Emails (RFC-5322 regex) &amp; 50 NaN Margin Records (coalesce to 0.0)</td><td class="p-3"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>Balanced &amp; Certified</span></td></tr>
+              <tr><td class="p-3 font-medium text-zinc-900"><div class="font-semibold text-zinc-950">Pillar 4 (HubSpot CRM v3 Store)</div><div class="text-[11px] text-zinc-500 font-mono">Batch Upsert Endpoint: /crm/v3/objects/contacts/batch/upsert</div></td><td class="p-3 font-mono text-zinc-700">100 records / batch • Token Bucket Rate Limiter</td><td class="p-3 text-zinc-700">HMAC-SHA256 Webhook Verification • 429 Retry Backoff (Full Jitter) • SHA-256 Idempotency Cache</td><td class="p-3"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>Connected &amp; Synced</span></td></tr>
             </tbody>
           </table>
         </div>
@@ -299,7 +333,7 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
         <button id="closeInfoBtn" type="button" class="text-zinc-400 hover:text-zinc-600 p-1 rounded-md hover:bg-zinc-100 transition"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
       </div>
       <div class="mt-4 space-y-4 text-xs">
-        <div class="rounded-lg bg-blue-50 border border-blue-200/60 p-3.5"><div class="flex items-center gap-2 font-semibold text-blue-900 mb-1.5"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Plain-English Business Meaning</div><p class="text-zinc-700 leading-relaxed" id="infoModalBusiness">-</p></div>
+        <div class="rounded-lg bg-emerald-50 border border-emerald-200/60 p-3.5"><div class="flex items-center gap-2 font-semibold text-emerald-900 mb-1.5"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Plain-English Business Meaning</div><p class="text-zinc-700 leading-relaxed" id="infoModalBusiness">-</p></div>
         <div class="rounded-lg bg-zinc-50 border border-zinc-200 p-3.5"><div class="flex items-center gap-2 font-semibold text-zinc-900 mb-1.5"><svg class="w-4 h-4 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg>Under-the-Hood Technical Detail</div><p class="text-zinc-600 font-mono text-[11px] leading-relaxed" id="infoModalTech">-</p></div>
       </div>
       <div class="mt-5 flex justify-end"><button id="closeInfoBtn2" type="button" class="px-3.5 py-1.5 rounded-md text-xs font-medium bg-zinc-950 text-white hover:bg-zinc-800 transition">Understood</button></div>
@@ -321,6 +355,10 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
   </aside>
 
   <script>
+    function escapeHtml(text) {
+      return String(text ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
     let currentLiveState = JSON.parse("${initialStateJson}");
     let activeTab = "all";
     let activeSegmentFilter = "";
@@ -329,6 +367,11 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
     let pageOffset = 0;
     let pageLimit = 25;
     let searchDebounceTimer = null;
+    let lastSyncedCount = currentLiveState.totalSyncedContacts;
+    let lastDlqPending = currentLiveState.dlqPendingE;
+    let lastDlqResolved = currentLiveState.dlqResolved;
+    let throughputHistory = new Array(60).fill(0);
+    let dlqHistory = new Array(60).fill(0);
 
     const infoDict = {
       overview: { title: "Executive Overview Mission Control", business: "High-level command center combining Power BI simplicity with instant visibility into customer synchronization, risk alerts, and data hygiene.", tech: "Consolidates Reverse ETL execution metrics from Snowflake/DuckDB into HubSpot CRM v3 with cryptographic audit trails and sub-second SLA validation." },
@@ -406,10 +449,10 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
       ["ENTERPRISE_VIP", "ENTERPRISE", "MID_MARKET", "SME"].forEach((seg) => {
         const row = document.getElementById("barRow_" + seg);
         if (!row) return;
-        if (activeSegmentFilter === seg) row.className = "segment-bar-row p-2.5 rounded-lg border-2 border-blue-500 bg-blue-50/50 transition cursor-pointer shadow-sm";
+        if (activeSegmentFilter === seg) row.className = "segment-bar-row p-2.5 rounded-lg border-2 border-emerald-600 bg-emerald-50/50 transition cursor-pointer shadow-sm";
         else row.className = "segment-bar-row p-2.5 rounded-lg border border-zinc-200 hover:border-zinc-400 transition cursor-pointer";
       });
-      if (clearBtn) clearBtn.className = activeSegmentFilter ? "self-start sm:self-auto px-2 py-0.5 rounded text-[11px] font-medium bg-blue-500 text-white transition" : "hidden";
+      if (clearBtn) clearBtn.className = activeSegmentFilter ? "self-start sm:self-auto px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-600 text-white transition" : "hidden";
       if (activeLabel) activeLabel.innerText = activeSegmentFilter ? activeSegmentFilter : "None (All Records)";
     }
 
@@ -428,7 +471,7 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
       document.getElementById("barFill_MID_MARKET").style.width = isZero ? "0%" : Math.min(100, Math.round((mm.annual_revenue / maxRev) * 100)) + "%";
       document.getElementById("barFill_SME").style.width = isZero ? "0%" : Math.min(100, Math.round((sme.annual_revenue / maxRev) * 100)) + "%";
 
-      document.getElementById("segNet_ENTERPRISE_VIP").innerText = isZero ? "Net: -$0.00 (-20.0% Risk)" : "Net: -$" + Math.abs(vip.net_profitability_usd).toLocaleString("en-US", { minimumFractionDigits: 2 }) + " (-20.0% Risk)";
+      document.getElementById("segNet_ENTERPRISE_VIP").innerText = isZero ? "Net: $0.00" : "Net: -$" + Math.abs(vip.net_profitability_usd).toLocaleString("en-US", { minimumFractionDigits: 2 }) + " (-20.0% Risk)";
       document.getElementById("segNet_ENTERPRISE").innerText = "Net: +$" + ent.net_profitability_usd.toLocaleString("en-US", { minimumFractionDigits: 2 });
       document.getElementById("segNet_MID_MARKET").innerText = "Net: +$" + mm.net_profitability_usd.toLocaleString("en-US", { minimumFractionDigits: 2 });
       document.getElementById("segNet_SME").innerText = "Net: +$" + sme.net_profitability_usd.toLocaleString("en-US", { minimumFractionDigits: 2 });
@@ -444,7 +487,6 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
       document.getElementById("segRev_SME").innerText = "Rev: $" + sme.annual_revenue.toLocaleString("en-US", { minimumFractionDigits: 2 });
       document.getElementById("totalSegmentRevSpan").innerText = "Total Rev: $" + totalRev.toLocaleString("en-US", { minimumFractionDigits: 2 });
 
-      // Progress bar & DLQ Triage
       const cleanDelivered = Math.max(0, s.syncedS - s.dlqResolved);
       const totalBase = Math.max(1, s.extractedN || 10000);
       document.getElementById("progressClean").style.width = isZero ? "0%" : Math.min(100, (cleanDelivered / totalBase) * 100) + "%";
@@ -454,10 +496,13 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
       document.getElementById("cleanDeliveredCount").innerText = isZero ? "0" : cleanDelivered.toLocaleString("en-US");
       document.getElementById("repairedCountProg").innerText = s.dlqResolved.toLocaleString("en-US");
       document.getElementById("heldCountProg").innerText = s.dlqPendingE.toLocaleString("en-US");
+      document.getElementById("conservationRatioText").innerText = isZero ? "0 / 0 (0%)" : s.syncedS.toLocaleString("en-US") + " / " + totalBase.toLocaleString("en-US") + " (" + Math.round((s.syncedS / totalBase) * 100) + "%)";
 
       const badge = document.getElementById("triageBadge");
       const emailStatus = document.getElementById("triageEmailStatus");
       const nanStatus = document.getElementById("triageNanStatus");
+      const emailCountEl = document.getElementById("triageEmailCountText");
+      const nanCountEl = document.getElementById("triageNanCountText");
       const btnRepair = document.getElementById("btnRepairNow");
       const actionStatus = document.getElementById("triageActionStatus");
 
@@ -465,20 +510,26 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
         if (badge) { badge.innerText = "Stage 0 Baseline"; badge.className = "self-start sm:self-auto px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-zinc-100 text-zinc-600 border border-zinc-200"; }
         if (emailStatus) emailStatus.innerText = "Standby";
         if (nanStatus) nanStatus.innerText = "Standby";
+        if (emailCountEl) emailCountEl.innerText = "0";
+        if (nanCountEl) nanCountEl.innerText = "0";
         if (btnRepair) btnRepair.className = "hidden";
-        if (actionStatus) actionStatus.innerText = "Awaiting Sync Ingestion";
+        if (actionStatus) actionStatus.innerText = "Standby";
       } else if (s.dlqPendingE > 0) {
         if (badge) { badge.innerText = s.dlqPendingE + " Pending Triage"; badge.className = "self-start sm:self-auto px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-rose-50 text-rose-700 border border-rose-200"; }
-        if (emailStatus) { emailStatus.innerText = (s.emailErrorsPending || 150) + " Quarantined"; emailStatus.className = "text-rose-600 font-semibold"; }
-        if (nanStatus) { nanStatus.innerText = (s.nanErrorsPending || 50) + " Quarantined"; nanStatus.className = "text-amber-600 font-semibold"; }
+        if (emailStatus) { emailStatus.innerText = (s.emailErrorsPending || 150) + " Quarantined"; emailStatus.className = "text-rose-700 font-semibold"; }
+        if (nanStatus) { nanStatus.innerText = (s.nanErrorsPending || 50) + " Quarantined"; nanStatus.className = "text-amber-700 font-semibold"; }
+        if (emailCountEl) emailCountEl.innerText = String(s.emailErrorsPending || 150);
+        if (nanCountEl) nanCountEl.innerText = String(s.nanErrorsPending || 50);
         if (btnRepair) { btnRepair.className = "px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium transition flex items-center justify-center gap-1.5 shadow-sm"; }
-        if (actionStatus) { actionStatus.innerText = "Surgical Replay Ready"; actionStatus.className = "text-xs font-mono text-amber-600"; }
+        if (actionStatus) { actionStatus.innerText = "Surgical Replay Ready"; actionStatus.className = "text-xs font-mono text-amber-700"; }
       } else {
         if (badge) { badge.innerText = "100% Healed & Delivered"; badge.className = "self-start sm:self-auto px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"; }
-        if (emailStatus) { emailStatus.innerText = "150 Auto-Repaired"; emailStatus.className = "text-emerald-600 font-semibold"; }
-        if (nanStatus) { nanStatus.innerText = "50 Coalesced 0.0"; nanStatus.className = "text-emerald-600 font-semibold"; }
+        if (emailStatus) { emailStatus.innerText = "150 Auto-Repaired"; emailStatus.className = "text-emerald-700 font-semibold"; }
+        if (nanStatus) { nanStatus.innerText = "50 Coalesced 0.0"; nanStatus.className = "text-emerald-700 font-semibold"; }
+        if (emailCountEl) emailCountEl.innerText = "150";
+        if (nanCountEl) nanCountEl.innerText = "50";
         if (btnRepair) btnRepair.className = "hidden";
-        if (actionStatus) { actionStatus.innerText = "DLQ Empty • Certified"; actionStatus.className = "text-xs font-mono text-emerald-600"; }
+        if (actionStatus) { actionStatus.innerText = "DLQ Empty • Certified"; actionStatus.className = "text-xs font-mono text-emerald-700"; }
       }
     }
 
@@ -514,18 +565,18 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
         filterQuery = e.target.value.toLowerCase().trim();
         pageOffset = 0;
         loadContacts(false);
-      }, 250);
+      }, 150);
     });
 
     function formatRowClient(c) {
       const isVip = Boolean(c.ai_executive_brief) || c.customer_tier.includes("VIP");
       const isHealed = c.remediated_from_dlq || (c.customer_id >= "CUST-09801");
-      const statusPill = isVip ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200"><span class="w-1.5 h-1.5 rounded-full bg-rose-500 mr-1.5"></span>VIP At Risk</span>' : isHealed ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>Auto-Repaired</span>' : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>Delivered</span>';
+      const statusPill = isVip ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200"><span class="w-1.5 h-1.5 rounded-full bg-rose-600 mr-1.5"></span>VIP At Risk</span>' : isHealed ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>Auto-Repaired</span>' : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>Delivered</span>';
       const briefCell = c.ai_executive_brief ? '<div class="flex items-center gap-1.5"><span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 shrink-0">[VIP-BRIEF]</span><span class="text-xs text-zinc-700 truncate max-w-xs" title="' + escapeHtml(c.ai_executive_brief) + '">' + escapeHtml(c.ai_executive_brief) + '</span></div>' : isHealed ? '<span class="text-xs text-zinc-500">Remediated via AI DLQ Doctor (RFC-5322 regex / coalesce)</span>' : '<span class="text-xs text-zinc-400">Standard Margin Profile - Normal Rhythm</span>';
       const marginBadge = c.profit_margin_pct < 0 ? '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">' + c.profit_margin_pct.toFixed(1) + '%</span>' : '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">+' + c.profit_margin_pct.toFixed(1) + '%</span>';
-      const tierBadge = isVip ? '<span class="px-2 py-0.5 rounded text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">' + escapeHtml(c.customer_tier) + '</span>' : '<span class="px-2 py-0.5 rounded text-xs font-medium bg-zinc-100 text-zinc-700 border border-zinc-200">' + escapeHtml(c.customer_tier) + '</span>';
+      const tierBadge = isVip ? '<span class="px-2 py-0.5 rounded text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200">' + escapeHtml(c.customer_tier) + '</span>' : '<span class="px-2 py-0.5 rounded text-xs font-medium bg-zinc-100 text-zinc-700 border border-zinc-200">' + escapeHtml(c.customer_tier) + '</span>';
       const safeJson = escapeHtml(JSON.stringify(c));
-      return '<tr class="customer-row border-b border-zinc-200 hover:bg-zinc-50/80 transition-colors cursor-pointer" data-contact="' + safeJson + '" onclick="openInspectorFromRow(this)"><td class="p-3"><div class="flex items-center gap-2"><span class="font-medium text-xs text-zinc-950 font-mono">' + escapeHtml(c.customer_id) + '</span><span class="px-1.5 py-0.2 rounded text-[10px] font-mono bg-zinc-100 text-zinc-600 border border-zinc-200">' + escapeHtml(c.country || "US") + '</span></div><div class="text-[11px] text-zinc-500">' + escapeHtml(c.company || "Enterprise Account") + ' • <span class="font-mono">' + escapeHtml(c.email) + '</span></div></td><td class="p-3">' + tierBadge + '</td><td class="p-3">' + statusPill + '</td><td class="p-3 font-mono text-xs font-semibold text-zinc-950">$' + c.net_profitability_usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</td><td class="p-3">' + marginBadge + '</td><td class="p-3">' + briefCell + '</td><td class="p-3 text-right"><button type="button" class="btn-inspect px-2.5 py-1 rounded text-xs font-medium border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100 transition" onclick="event.stopPropagation(); openInspectorFromRow(this.closest(\'tr\'))">Inspect</button></td></tr>';
+      return '<tr class="customer-row border-b border-zinc-200 hover:bg-zinc-50/80 transition-colors cursor-pointer" data-contact="' + safeJson + '" onclick="openInspectorFromRow(this)"><td class="p-3"><div class="flex items-center gap-2"><span class="font-medium text-xs text-zinc-950 font-mono">' + escapeHtml(c.customer_id) + '</span><span class="px-1.5 py-0.2 rounded text-[10px] font-mono bg-zinc-100 text-zinc-600 border border-zinc-200">' + escapeHtml(c.country || "US") + '</span></div><div class="text-[11px] text-zinc-500">' + escapeHtml(c.company || "Enterprise Account") + ' • <span class="font-mono">' + escapeHtml(c.email) + '</span></div></td><td class="p-3">' + tierBadge + '</td><td class="p-3">' + statusPill + '</td><td class="p-3 font-mono text-xs font-semibold text-zinc-950">$' + (c.net_profitability_usd || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</td><td class="p-3">' + marginBadge + '</td><td class="p-3">' + briefCell + '</td><td class="p-3 text-right"><button type="button" class="btn-inspect px-2.5 py-1 rounded text-xs font-medium border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100 transition" onclick="event.stopPropagation(); openInspectorFromRow(this.closest(\'tr\'))">Inspect</button></td></tr>';
     }
 
     async function loadContacts(append = false) {
@@ -546,7 +597,7 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
         const data = await resp.json();
         const rowsHtml = (data.contacts || []).map(formatRowClient).join("\n");
         if (data.total === 0) {
-          tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-xs text-zinc-500 font-mono">No matching records found in CRM store for current filter.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-xs text-zinc-500 font-mono">No se encontraron registros en el CRM store con el filtro actual.</td></tr>';
           updatePaginationUi(0, 0, 0, false);
           return;
         }
@@ -586,26 +637,61 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
       try { openInspector(JSON.parse(row.getAttribute("data-contact"))); } catch (e) { console.error(e); }
     }
 
-    function applyStateToDom(s) {
-      currentLiveState = s;
+    function updateTaskManagerChart(throughputDelta, dlqDelta) {
+      throughputHistory.shift();
+      throughputHistory.push(throughputDelta);
+      dlqHistory.shift();
+      dlqHistory.push(dlqDelta);
+
+      const maxVal = Math.max(10, ...throughputHistory, ...dlqHistory);
+      const w = 600;
+      const h = 100;
+      const step = w / 59;
+
+      const tpPoints = throughputHistory.map((val, i) => {
+        const x = Math.round(i * step);
+        const y = Math.round(h - 4 - ((val / maxVal) * (h - 16)));
+        return x + "," + y;
+      }).join(" ");
+
+      const dlqPoints = dlqHistory.map((val, i) => {
+        const x = Math.round(i * step);
+        const y = Math.round(h - 4 - ((val / maxVal) * (h - 16)));
+        return x + "," + y;
+      }).join(" ");
+
+      const tpEl = document.getElementById("perfPolylineThroughput");
+      const dlqEl = document.getElementById("perfPolylineDlq");
+      if (tpEl) tpEl.setAttribute("points", tpPoints);
+      if (dlqEl) dlqEl.setAttribute("points", dlqPoints);
+
+      const indicator = document.getElementById("perfStatusIndicator");
+      if (indicator) {
+        if (throughputDelta > 0) { indicator.innerText = "INGESTANDO..."; indicator.className = "absolute top-1.5 right-3 text-[10px] font-mono text-emerald-400 font-bold animate-pulse"; }
+        else if (dlqDelta > 0) { indicator.innerText = "CUARENTENA ACTIVA"; indicator.className = "absolute top-1.5 right-3 text-[10px] font-mono text-rose-400 font-bold animate-pulse"; }
+        else { indicator.innerText = "EN ESPERA"; indicator.className = "absolute top-1.5 right-3 text-[10px] font-mono text-emerald-500 font-semibold"; }
+      }
+    }
+
+    function applyStateToDom(s, stateChanged = false) {
       const isZero = s.totalSyncedContacts === 0 && s.extractedN === 0;
 
       document.getElementById("kpi-synced").innerText = s.totalSyncedContacts.toLocaleString("en-US");
       document.getElementById("kpi-vip").innerText = s.vipBriefCount;
       document.getElementById("kpi-dlq").innerText = s.dlqPendingE;
       document.getElementById("kpi-savings").innerText = isZero ? "$0.00" : "$" + s.annualSaasSavingsUsd.toLocaleString("en-US", { minimumFractionDigits: 2 });
-      document.getElementById("phase-banner").innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse mr-1"></span>' + (s.currentPhase || "");
+      document.getElementById("phase-banner").innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse mr-1"></span>' + (s.currentPhase || "");
 
       const synTrend = document.getElementById("kpi-synced-trend");
-      if (synTrend) synTrend.innerHTML = isZero ? '<span class="inline-flex items-center font-medium text-zinc-500"><span class="w-1.5 h-1.5 rounded-full bg-zinc-400 mr-1.5"></span>Standby • Awaiting Sync</span>' : s.totalSyncedContacts >= 10000 ? '<span class="inline-flex items-center font-medium text-emerald-600"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>100% Complete • Zero row loss</span>' : s.totalSyncedContacts >= 9800 ? '<span class="inline-flex items-center font-medium text-emerald-600"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>+98.0% First Pass • 200 Held in DLQ</span>' : '<span class="inline-flex items-center font-medium text-blue-600"><span class="w-1.5 h-1.5 rounded-full bg-blue-500 mr-1.5 animate-pulse"></span>10k in Warehouse • Ready to Sync</span>';
+      if (synTrend) synTrend.innerHTML = isZero ? '<span class="inline-flex items-center font-medium text-zinc-500"><span class="w-1.5 h-1.5 rounded-full bg-zinc-400 mr-1.5"></span>Standby • Awaiting Sync</span>' : s.totalSyncedContacts >= 10000 ? '<span class="inline-flex items-center font-medium text-emerald-700"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>100% Complete • Zero row loss</span>' : s.totalSyncedContacts >= 9800 ? '<span class="inline-flex items-center font-medium text-emerald-700"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>+98.0% First Pass • 200 Held in DLQ</span>' : '<span class="inline-flex items-center font-medium text-amber-700"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5 animate-pulse"></span>10k in Warehouse • Ready to Sync</span>';
       const vipTrend = document.getElementById("kpi-vip-trend");
-      if (vipTrend) vipTrend.innerHTML = isZero || s.vipBriefCount === 0 ? '<span class="inline-flex items-center font-medium text-zinc-500"><span class="w-1.5 h-1.5 rounded-full bg-zinc-400 mr-1.5"></span>0 Alerts • Normal Margin Profile</span>' : '<span class="inline-flex items-center font-medium text-rose-600"><span class="w-1.5 h-1.5 rounded-full bg-rose-500 mr-1.5"></span>-20.0% Margin Drop • Executive retention call</span>';
+      if (vipTrend) vipTrend.innerHTML = isZero || s.vipBriefCount === 0 ? '<span class="inline-flex items-center font-medium text-zinc-500"><span class="w-1.5 h-1.5 rounded-full bg-zinc-400 mr-1.5"></span>0 Alerts • Normal Margin Profile</span>' : '<span class="inline-flex items-center font-medium text-rose-700"><span class="w-1.5 h-1.5 rounded-full bg-rose-600 mr-1.5"></span>-20.0% Margin Drop • Executive retention call</span>';
       const dlqDot = document.getElementById("kpi-dlq-dot");
-      if (dlqDot) dlqDot.className = isZero ? "w-2.5 h-2.5 rounded-full bg-zinc-400" : s.dlqPendingE > 0 ? "w-2.5 h-2.5 rounded-full bg-rose-500" : s.dlqResolved > 0 ? "w-2.5 h-2.5 rounded-full bg-amber-500" : "w-2.5 h-2.5 rounded-full bg-emerald-500";
+      if (dlqDot) dlqDot.className = isZero ? "w-2.5 h-2.5 rounded-full bg-zinc-400" : s.dlqPendingE > 0 ? "w-2.5 h-2.5 rounded-full bg-rose-600" : s.dlqResolved > 0 ? "w-2.5 h-2.5 rounded-full bg-amber-500" : "w-2.5 h-2.5 rounded-full bg-emerald-600";
       const dlqTrend = document.getElementById("kpi-dlq-trend");
-      if (dlqTrend) dlqTrend.innerHTML = isZero ? '<span class="inline-flex items-center text-xs font-medium text-zinc-500"><span class="w-1.5 h-1.5 rounded-full bg-zinc-400 mr-1.5"></span>Standby: 0 Anomalies Held</span>' : s.dlqPendingE > 0 ? '<span class="inline-flex items-center text-xs font-medium text-rose-600"><span class="w-1.5 h-1.5 rounded-full bg-rose-500 mr-1.5"></span>Danger: ' + (s.emailErrorsPending || 150) + ' Email, ' + (s.nanErrorsPending || 50) + ' NaN Held</span>' : '<span class="inline-flex items-center text-xs font-medium text-emerald-600"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>Healthy: 0 Held / ' + s.dlqResolved + ' Repaired</span>';
+      if (dlqTrend) dlqTrend.innerHTML = isZero ? '<span class="inline-flex items-center text-xs font-medium text-zinc-500"><span class="w-1.5 h-1.5 rounded-full bg-zinc-400 mr-1.5"></span>Standby: 0 Anomalies Held</span>' : s.dlqPendingE > 0 ? '<span class="inline-flex items-center text-xs font-medium text-rose-700"><span class="w-1.5 h-1.5 rounded-full bg-rose-600 mr-1.5"></span>Danger: ' + (s.emailErrorsPending || 150) + ' Email, ' + (s.nanErrorsPending || 50) + ' NaN Held</span>' : '<span class="inline-flex items-center text-xs font-medium text-emerald-700"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>Healthy: 0 Held / ' + s.dlqResolved + ' Repaired</span>';
       const savTrend = document.getElementById("kpi-savings-trend");
-      if (savTrend) savTrend.innerHTML = isZero ? '<span class="inline-flex items-center font-medium text-zinc-500"><span class="w-1.5 h-1.5 rounded-full bg-zinc-400 mr-1.5"></span>Standby • $4,170/yr projected on active sync</span>' : '<span class="inline-flex items-center font-medium text-emerald-600"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>99.3% Cost Reduction • $2.50/mo vs $4,200/yr</span>';
+      if (savTrend) savTrend.innerHTML = isZero ? '<span class="inline-flex items-center font-medium text-zinc-500"><span class="w-1.5 h-1.5 rounded-full bg-zinc-400 mr-1.5"></span>Standby • $4,170/yr projected on active sync</span>' : '<span class="inline-flex items-center font-medium text-emerald-700"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>99.3% Cost Reduction • $2.50/mo vs $4,200/yr</span>';
 
       const tabAll = document.getElementById("tabCountAll");
       if (tabAll) tabAll.innerText = s.totalSyncedContacts.toLocaleString("en-US");
@@ -618,7 +704,29 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
       if (p3) p3.innerHTML = "Extracted: " + s.extractedN + " | Delivered: " + s.syncedS + " | Unchanged Skipped: " + s.skippedO + " | Held: " + s.dlqPendingE;
 
       renderPowerBiAnalytics(s);
-      if (activeTab !== "health") loadContacts(false);
+
+      // Task Manager velocity metrics
+      const tpDelta = Math.max(0, s.totalSyncedContacts - lastSyncedCount);
+      const dlqDelta = Math.max(0, s.dlqPendingE - lastDlqPending);
+      const fixDelta = Math.max(0, s.dlqResolved - lastDlqResolved);
+      lastSyncedCount = s.totalSyncedContacts;
+      lastDlqPending = s.dlqPendingE;
+      lastDlqResolved = s.dlqResolved;
+
+      const perfTp = document.getElementById("perfThroughputVal");
+      if (perfTp) perfTp.innerText = tpDelta > 0 ? (tpDelta * 2).toLocaleString("en-US") + " rec/s" : "0 rec/s";
+      const perfDlq = document.getElementById("perfDlqVal");
+      if (perfDlq) perfDlq.innerText = dlqDelta > 0 ? (dlqDelta * 2) + " err/s" : "0 err/s";
+      const perfFix = document.getElementById("perfHealedVal");
+      if (perfFix) perfFix.innerText = fixDelta > 0 ? (fixDelta * 2) + " fix/s" : "0 fix/s";
+
+      updateTaskManagerChart(tpDelta, dlqDelta);
+
+      currentLiveState = s;
+      if (stateChanged && activeTab !== "health") {
+        pageOffset = 0;
+        loadContacts(false);
+      }
     }
 
     async function triggerPipelinePhase(phase, btnEl) {
@@ -635,7 +743,7 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
           body: JSON.stringify({ phase })
         });
         const data = await resp.json();
-        if (data.state) applyStateToDom(data.state);
+        if (data.state) applyStateToDom(data.state, true);
       } catch (err) {
         console.error("Pipeline run error:", err);
       } finally {
@@ -650,8 +758,8 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
     const pollStatusText = document.getElementById("pollingStatusText");
     togglePollBtn.addEventListener("click", () => {
       pollingActive = !pollingActive;
-      pollDot.className = pollingActive ? "w-2 h-2 rounded-full bg-emerald-500" : "w-2 h-2 rounded-full bg-zinc-400";
-      pollStatusText.innerText = pollingActive ? "Auto-Refresh (2s)" : "Auto-Refresh: PAUSED";
+      pollDot.className = pollingActive ? "w-2 h-2 rounded-full bg-emerald-600" : "w-2 h-2 rounded-full bg-zinc-400";
+      pollStatusText.innerText = pollingActive ? "Auto-Refresh (1.5s)" : "Auto-Refresh: PAUSED";
     });
 
     setInterval(async () => {
@@ -660,9 +768,10 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
         const resp = await fetch("/api/v1/state");
         if (!resp.ok) return;
         const s = await resp.json();
-        applyStateToDom(s);
+        const changed = s.totalSyncedContacts !== currentLiveState.totalSyncedContacts || s.dlqPendingE !== currentLiveState.dlqPendingE || s.dlqResolved !== currentLiveState.dlqResolved || s.currentPhase !== currentLiveState.currentPhase;
+        applyStateToDom(s, changed);
       } catch (err) {}
-    }, 2000);
+    }, 1500);
 
     setInterval(async () => {
       try {
@@ -670,21 +779,21 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
         const dot = document.getElementById("connDot");
         const txt = document.getElementById("connText");
         if (resp.ok) {
-          if (dot) dot.className = "w-1.5 h-1.5 rounded-full bg-emerald-500";
+          if (dot) dot.className = "w-1.5 h-1.5 rounded-full bg-emerald-600";
           if (txt) txt.innerText = "Connector Online";
         } else {
-          if (dot) dot.className = "w-1.5 h-1.5 rounded-full bg-rose-500";
+          if (dot) dot.className = "w-1.5 h-1.5 rounded-full bg-rose-600";
           if (txt) txt.innerText = "Connector Offline";
         }
       } catch {
         const dot = document.getElementById("connDot");
         const txt = document.getElementById("connText");
-        if (dot) dot.className = "w-1.5 h-1.5 rounded-full bg-rose-500";
+        if (dot) dot.className = "w-1.5 h-1.5 rounded-full bg-rose-600";
         if (txt) txt.innerText = "Connector Offline";
       }
     }, 5000);
 
-    applyStateToDom(currentLiveState);
+    applyStateToDom(currentLiveState, false);
   </script>
 </body>
 </html>`;
