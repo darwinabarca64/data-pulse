@@ -47,6 +47,7 @@ class CustomerProfitabilityRecord(BaseModel):
     customer_tier: CustomerTier
     updated_at: datetime
     ai_executive_brief: str | None = None
+    remediated_from_dlq: bool = False
 
     @field_validator(
         "annual_revenue",

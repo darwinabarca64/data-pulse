@@ -16,6 +16,7 @@ import {
   validateBatchRecordsGranular,
   verifyHmacSignature,
 } from "../src/domain/contracts.js";
+import { renderLiveDashboardHtml } from "../src/infrastructure/dashboard_view.js";
 import { createConnectorServer } from "../src/infrastructure/server.js";
 
 const EMOJI_REGEX =
@@ -157,7 +158,7 @@ describe("Step 5: TypeScript Connector Domain, Resilience & HTTP Server", () => 
       expect(html).toContain("DataPulse Reverse ETL");
       expect(html).toContain("Pillar 1: Warehouse &amp; FinOps Guardrails");
       expect(html).toContain("Pillar 2: Apache Airflow Thin DAG");
-      expect(html).toContain("Pillar 3: N = S + O + E &amp; Out-of-Band AI DLQ Doctor");
+      expect(html).toContain("Pillar 3: Data Delivery Balance");
       expect(html).toContain("Pillar 4 (HubSpot CRM v3 Store)");
       expect(html).toContain("PHASE 4: SHA-256 IDEMPOTENCY VERIFIED");
       expect(html).toContain("[VIP-BRIEF]");
@@ -168,5 +169,70 @@ describe("Step 5: TypeScript Connector Domain, Resilience & HTTP Server", () => 
         server.close((err) => (err ? reject(err) : resolve()))
       );
     }
+  });
+it("enforces Honest Zero Baseline when state is 0", () => {
+    const { store } = createConnectorServer();
+    const state = store.getState();
+    expect(state.totalSyncedContacts).toBe(0);
+    expect(state.dlqResolved).toBe(0);
+    expect(state.annualSaasSavingsUsd).toBe(0);
+    expect(state.extractedN).toBe(0);
+
+    const html = renderLiveDashboardHtml(state);
+    expect(html).toContain("Stage 0 Baseline");
+    expect(html).not.toContain("9,800 Delivered");
+    expect(html).not.toContain("200 Repaired");
+    expect(html).toContain('d="M 50 190 L 880 190"');
+    expect(EMOJI_REGEX.test(html)).toBe(false);
+  });
+
+  it("preserves all 11 columns and computes segment sums accurately", () => {
+    const { store } = createConnectorServer();
+    store.upsertBatch([
+      {
+        customer_id: "CUST-00001",
+        email: "vip@corp.com",
+        company_name: "MegaCorp",
+        country_code: "US",
+        annual_revenue: 120000,
+        annual_cost: 150000,
+        net_profitability_usd: -30000,
+        profit_margin_pct: -25.0,
+        customer_tier: "ENTERPRISE_VIP",
+        remediated_from_dlq: false,
+        ai_executive_brief: "VIP margin dropped",
+      },
+      {
+        customer_id: "CUST-09801",
+        email: "fixed@corp.com",
+        company_name: "FixCo",
+        country_code: "DE",
+        annual_revenue: 80000,
+        annual_cost: 40000,
+        net_profitability_usd: 40000,
+        profit_margin_pct: 50.0,
+        customer_tier: "ENTERPRISE",
+        remediated_from_dlq: true,
+      },
+    ]);
+
+    const state = store.getState();
+    expect(state.totalSyncedContacts).toBe(2);
+    expect(state.vipBriefCount).toBe(1);
+    expect(state.remediatedContactCount).toBe(1);
+
+    const vip = state.contacts.find((c) => c.customer_id === "CUST-00001");
+    expect(vip?.company).toBe("MegaCorp");
+    expect(vip?.country).toBe("US");
+    expect(vip?.annual_revenue).toBe(120000);
+    expect(vip?.remediated_from_dlq).toBe(false);
+
+    const healed = state.contacts.find((c) => c.customer_id === "CUST-09801");
+    expect(healed?.company).toBe("FixCo");
+    expect(healed?.country).toBe("DE");
+    expect(healed?.remediated_from_dlq).toBe(true);
+
+    expect(state.segmentBreakdown.ENTERPRISE_VIP.annual_revenue).toBe(120000);
+    expect(state.segmentBreakdown.ENTERPRISE.annual_revenue).toBe(80000);
   });
 });

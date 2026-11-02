@@ -24,13 +24,22 @@ export const HubSpotContactPropertiesSchema = z
     hs_profit_margin_pct: finiteNumberSchema.optional(),
     datapulse_profit_margin_pct: finiteNumberSchema.optional(),
     profit_margin_pct: finiteNumberSchema.optional(),
+    annualrevenue: finiteNumberSchema.optional(),
+    annual_revenue: finiteNumberSchema.optional(),
+    datapulse_annual_cost: finiteNumberSchema.optional(),
+    annual_cost: finiteNumberSchema.optional(),
     company: z.string().optional(),
+    company_name: z.string().optional(),
     country: z.string().optional(),
+    country_code: z.string().optional(),
     hs_currency_code: z.string().optional(),
+    currency_code: z.string().optional(),
     datapulse_customer_tier: z.string().optional(),
     customer_tier: z.string().optional(),
     datapulse_ai_executive_brief: z.string().nullable().optional(),
     ai_executive_brief: z.string().nullable().optional(),
+    datapulse_remediated_from_dlq: z.preprocess((v) => v === true || v === "true", z.boolean()).optional(),
+    remediated_from_dlq: z.preprocess((v) => v === true || v === "true", z.boolean()).optional(),
   })
   .superRefine((data, ctx) => {
     const cid = data.hs_external_customer_id ?? data.datapulse_customer_id ?? data.customer_id;
@@ -41,8 +50,7 @@ export const HubSpotContactPropertiesSchema = z
         path: ["hs_external_customer_id"],
       });
     }
-    const netProf =
-      data.hs_net_profitability_usd ?? data.datapulse_net_profitability_usd ?? data.net_profitability_usd;
+    const netProf = data.hs_net_profitability_usd ?? data.datapulse_net_profitability_usd ?? data.net_profitability_usd;
     if (netProf === undefined) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -50,8 +58,7 @@ export const HubSpotContactPropertiesSchema = z
         path: ["hs_net_profitability_usd"],
       });
     }
-    const margin =
-      data.hs_profit_margin_pct ?? data.datapulse_profit_margin_pct ?? data.profit_margin_pct;
+    const margin = data.hs_profit_margin_pct ?? data.datapulse_profit_margin_pct ?? data.profit_margin_pct;
     if (margin === undefined) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -67,10 +74,13 @@ export interface NormalizedCrmContact {
   company: string;
   country: string;
   currency_code: string;
+  annual_revenue: number;
+  annual_cost: number;
   net_profitability_usd: number;
   profit_margin_pct: number;
   customer_tier: string;
   ai_executive_brief: string | null;
+  remediated_from_dlq: boolean;
   synced_at: string;
 }
 
@@ -128,9 +138,11 @@ export function validateBatchRecordsGranular(records: unknown[]): GranularValida
     validRecords.push({
       customer_id: String(d.hs_external_customer_id ?? d.datapulse_customer_id ?? d.customer_id),
       email: d.email,
-      company: d.company ?? "Enterprise Account",
-      country: d.country ?? "US",
-      currency_code: d.hs_currency_code ?? "USD",
+      company: d.company ?? d.company_name ?? "Enterprise Account",
+      country: d.country ?? d.country_code ?? "US",
+      currency_code: d.hs_currency_code ?? d.currency_code ?? "USD",
+      annual_revenue: Number(d.annualrevenue ?? d.annual_revenue ?? 0),
+      annual_cost: Number(d.datapulse_annual_cost ?? d.annual_cost ?? 0),
       net_profitability_usd: Number(
         d.hs_net_profitability_usd ?? d.datapulse_net_profitability_usd ?? d.net_profitability_usd
       ),
@@ -139,6 +151,7 @@ export function validateBatchRecordsGranular(records: unknown[]): GranularValida
       ),
       customer_tier: d.datapulse_customer_tier ?? d.customer_tier ?? "ENTERPRISE",
       ai_executive_brief: d.datapulse_ai_executive_brief ?? d.ai_executive_brief ?? null,
+      remediated_from_dlq: Boolean(d.datapulse_remediated_from_dlq ?? d.remediated_from_dlq ?? false),
       synced_at: nowIso,
     });
   }

@@ -194,6 +194,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         "skippedO": rep.skipped_unchanged_count,
                         "dlqPendingE": rep.dlq_isolated_count,
                         "dlqResolved": 200 if is_idemp else 0,
+                        "annualSaasSavingsUsd": rep.annual_saas_savings_usd,
                     }
                 )
         return 0

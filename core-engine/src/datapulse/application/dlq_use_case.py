@@ -157,6 +157,9 @@ class ManageDLQUseCase:
             except ValidationError:
                 continue
 
+            if apply_remediation:
+                valid_rec.remediated_from_dlq = True
+
             if manifest.ai_enrichment.enabled:
                 brief = generate_vip_executive_brief(
                     valid_rec,
