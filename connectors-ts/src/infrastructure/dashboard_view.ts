@@ -1,8 +1,10 @@
 /**
- * Infrastructure Layer: 4-Pillar Unified Visual Mission Control Scratchpad Renderer.
+ * Infrastructure Layer: Interactive DataPulse Mission Control Console.
+ * Single source of truth for Reverse ETL telemetry, DLQ triage, FinOps guardrails, and CRM contacts.
  */
 
 import { NormalizedCrmContact } from "../domain/contracts.js";
+import type { BatchBufferEntry, QuarantinedErrorRecord } from "./server.js";
 
 export interface BatchHistoryEntry {
   batchIndex: number;
@@ -59,253 +61,505 @@ export interface CrmStoreState {
   batchHistory: BatchHistoryEntry[];
   segmentBreakdown: SegmentBreakdown;
   contacts: NormalizedCrmContact[];
+  stateVersion?: number;
+  projectedAnnualSavingsUsd?: number;
+  anomalyIdRange?: string | null;
+  emailErrorRange?: string | null;
+  nanErrorRange?: string | null;
+  quarantinedErrors?: QuarantinedErrorRecord[];
+  batches?: BatchBufferEntry[];
 }
 
-function escapeHtml(text: string): string {
-  return String(text ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+function escapeHtml(text: unknown): string {
+  return String(text ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
-function formatRowSsr(c: NormalizedCrmContact): string {
-  const isVip = Boolean(c.ai_executive_brief) || c.customer_tier.includes("VIP");
-  const isHealed = c.remediated_from_dlq || (c.customer_id >= "CUST-09801");
-  const statusPill = isVip ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200"><span class="w-1.5 h-1.5 rounded-full bg-rose-600 mr-1.5"></span>VIP At Risk</span>' : isHealed ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>Auto-Repaired</span>' : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>Delivered</span>';
-  const briefCell = c.ai_executive_brief ? `<div class="flex items-center gap-1.5"><span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 shrink-0">[VIP-BRIEF]</span><span class="text-xs text-zinc-700 truncate max-w-xs" title="${escapeHtml(c.ai_executive_brief)}">${escapeHtml(c.ai_executive_brief)}</span></div>` : isHealed ? '<span class="text-xs text-zinc-500">Remediated via AI DLQ Doctor (RFC-5322 regex / coalesce)</span>' : '<span class="text-xs text-zinc-400">Standard Margin Profile - Normal Rhythm</span>';
+function renderInitialRow(c: NormalizedCrmContact): string {
+  const isVip = Boolean(c.ai_executive_brief) || (c.customer_tier ?? "").includes("VIP");
+  const isHealed = Boolean(c.remediated_from_dlq);
+  const statusPill = isVip
+    ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200"><span class="w-1.5 h-1.5 rounded-full bg-rose-600 mr-1.5"></span>VIP At Risk</span>'
+    : isHealed
+      ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>Auto-Repaired</span>'
+      : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>Delivered</span>';
+
+  const briefCell = c.ai_executive_brief
+    ? `<div class="flex items-center gap-1.5"><span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 shrink-0">[VIP-BRIEF]</span><span class="text-xs text-zinc-700 truncate max-w-xs" title="${escapeHtml(c.ai_executive_brief)}">${escapeHtml(c.ai_executive_brief)}</span></div>`
+    : isHealed
+      ? '<span class="text-xs text-zinc-500 font-mono">Remediated via AI DLQ Replay</span>'
+      : '<span class="text-xs text-zinc-400">Standard Margin Profile</span>';
+
   const marginBadge = `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold ${c.profit_margin_pct < 0 ? "bg-rose-50 text-rose-700 border border-rose-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"}">${c.profit_margin_pct < 0 ? "" : "+"}${c.profit_margin_pct.toFixed(1)}%</span>`;
   const tierBadge = `<span class="px-2 py-0.5 rounded text-xs font-medium ${isVip ? "bg-rose-50 text-rose-700 border border-rose-200" : "bg-zinc-100 text-zinc-700 border border-zinc-200"}">${escapeHtml(c.customer_tier)}</span>`;
   const safeJson = escapeHtml(JSON.stringify(c));
-  return `<tr class="customer-row border-b border-zinc-200 hover:bg-zinc-50/80 transition-colors cursor-pointer" data-contact="${safeJson}" onclick="openInspectorFromRow(this)"><td class="p-3 text-center"><input type="checkbox" class="rounded border-zinc-300 text-zinc-900 focus:ring-0" onclick="event.stopPropagation()" /></td><td class="p-3"><div class="flex items-center gap-2"><span class="font-medium text-xs text-zinc-950 font-mono">${escapeHtml(c.customer_id)}</span><span class="px-1.5 py-0.2 rounded text-[10px] font-mono bg-zinc-100 text-zinc-600 border border-zinc-200">${escapeHtml(c.country || "US")}</span></div><div class="text-[11px] text-zinc-500">${escapeHtml(c.company || "Enterprise Account")} • <span class="font-mono">${escapeHtml(c.email)}</span></div></td><td class="p-3">${tierBadge}</td><td class="p-3">${statusPill}</td><td class="p-3 font-mono text-xs font-semibold text-zinc-950">$${c.net_profitability_usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td><td class="p-3">${marginBadge}</td><td class="p-3">${briefCell}</td><td class="p-3 text-right"><button type="button" class="btn-inspect px-2.5 py-1 rounded text-xs font-medium border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100 transition" onclick="event.stopPropagation(); openInspectorFromRow(this.closest('tr'))">Inspect</button></td></tr>`;
+
+  return `<tr class="customer-row border-b border-zinc-200 hover:bg-zinc-50/80 transition-colors cursor-pointer" data-contact="${safeJson}" onclick="openInspectorFromRow(this)"><td class="p-3 text-center"><input type="checkbox" class="rounded border-zinc-300 text-zinc-900 focus:ring-0" onclick="event.stopPropagation()" /></td><td class="p-3"><div class="flex items-center gap-2"><span class="font-medium text-xs text-zinc-950 font-mono">${escapeHtml(c.customer_id)}</span><span class="px-1.5 py-0.2 rounded text-[10px] font-mono bg-zinc-100 text-zinc-600 border border-zinc-200">${escapeHtml(c.country || "US")}</span></div><div class="text-[11px] text-zinc-500">${escapeHtml(c.company || "Enterprise Account")} &bull; <span class="font-mono">${escapeHtml(c.email)}</span></div></td><td class="p-3">${tierBadge}</td><td class="p-3">${statusPill}</td><td class="p-3 font-mono text-xs font-semibold text-zinc-950">$${c.net_profitability_usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td><td class="p-3">${marginBadge}</td><td class="p-3">${briefCell}</td><td class="p-3 text-right"><button type="button" class="btn-inspect px-2.5 py-1 rounded text-xs font-medium border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100 transition" onclick="event.stopPropagation(); openInspectorFromRow(this)">Inspect</button></td></tr>`;
 }
 
 function renderInitialRows(contacts: NormalizedCrmContact[], isZero: boolean): string {
-  if (isZero || !contacts || contacts.length === 0) return '<tr><td colspan="8" class="p-12 text-center text-xs text-zinc-500 font-mono">Stage 0 Baseline: 0 Contacts in CRM. Ingestion pipeline is idle. Click "1. Run Initial Sync" above to stream batches...</td></tr>';
-  return contacts.slice(0, 25).map(formatRowSsr).join("\n");
+  if (isZero || !contacts || contacts.length === 0) {
+    return '<tr><td colspan="8" class="p-12 text-center text-xs text-zinc-500 font-mono">Stage 0 Baseline: 0 Contacts in CRM. Ingestion pipeline is idle. Click "1. Run Initial Sync" above to stream batches...</td></tr>';
+  }
+  return contacts.slice(0, 25).map(renderInitialRow).join("\n");
 }
 
 export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""): string {
   const isZero = state.totalSyncedContacts === 0 && state.extractedN === 0;
-  const initialStateJson = escapeHtml(JSON.stringify(state));
+  const safeStateJson = JSON.stringify(state).replace(/</g, "\\u003c");
 
-  const syncedTrendHtml = isZero ? '<span class="inline-flex items-center font-medium text-zinc-500"><span class="w-1.5 h-1.5 rounded-full bg-zinc-400 mr-1.5"></span>Standby • Awaiting Sync</span>' : state.totalSyncedContacts >= 10000 ? '<span class="inline-flex items-center font-medium text-emerald-700"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>100% Complete • Zero row loss</span>' : state.totalSyncedContacts >= 9800 ? '<span class="inline-flex items-center font-medium text-emerald-700"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>+98.0% First Pass • 200 Held in DLQ</span>' : '<span class="inline-flex items-center font-medium text-amber-700"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5 animate-pulse"></span>10k in Warehouse • Ready to Sync</span>';
-  const vipTrendHtml = isZero || state.vipBriefCount === 0 ? '<span class="inline-flex items-center font-medium text-zinc-500"><span class="w-1.5 h-1.5 rounded-full bg-zinc-400 mr-1.5"></span>0 Alerts • Normal Margin Profile</span>' : '<span class="inline-flex items-center font-medium text-rose-700"><span class="w-1.5 h-1.5 rounded-full bg-rose-600 mr-1.5"></span>-20.0% Margin Drop • Executive retention call</span>';
-  const dlqDotColor = isZero ? "bg-zinc-400" : state.dlqPendingE > 0 ? "bg-rose-600" : state.dlqResolved > 0 ? "bg-amber-500" : "bg-emerald-600";
-  const dlqTrendHtml = isZero ? '<span class="inline-flex items-center text-xs font-medium text-zinc-500"><span class="w-1.5 h-1.5 rounded-full bg-zinc-400 mr-1.5"></span>Standby: 0 Anomalies Held</span>' : state.dlqPendingE > 0 ? `<span class="inline-flex items-center text-xs font-medium text-rose-700"><span class="w-1.5 h-1.5 rounded-full bg-rose-600 mr-1.5"></span>Danger: ${state.emailErrorsPending || 150} Email, ${state.nanErrorsPending || 50} NaN Held</span>` : `<span class="inline-flex items-center text-xs font-medium text-emerald-700"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>Healthy: 0 Held / ${state.dlqResolved} Repaired</span>`;
-  const savingsValue = isZero ? "$0.00" : `$${state.annualSaasSavingsUsd.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
-  const savingsTrendHtml = isZero ? '<span class="inline-flex items-center font-medium text-zinc-500"><span class="w-1.5 h-1.5 rounded-full bg-zinc-400 mr-1.5"></span>Standby • $4,170/yr projected on active sync</span>' : '<span class="inline-flex items-center font-medium text-emerald-700"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>99.3% Cost Reduction • $2.50/mo vs $4,200/yr</span>';
+  const syncedTrendText = isZero
+    ? "Standby: Awaiting Sync"
+    : state.totalSyncedContacts >= 10000
+      ? "100% Complete &bull; Zero row loss"
+      : state.totalSyncedContacts >= 9800
+        ? "+98.0% First Pass &bull; 200 Held in DLQ"
+        : "Sync in progress";
 
-  const triageBadgeText = isZero ? "Stage 0 Baseline" : state.dlqPendingE > 0 ? `${state.dlqPendingE} Pending Triage` : "100% Certified";
-  const triageBadgeClass = isZero ? "bg-zinc-100 text-zinc-600 border border-zinc-200" : state.dlqPendingE > 0 ? "bg-rose-50 text-rose-700 border border-rose-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200";
-  const triageEmailStatusText = isZero ? "Standby" : state.dlqPendingE > 0 ? `${state.emailErrorsPending || 150} Quarantined` : "150 Auto-Repaired";
-  const triageNanStatusText = isZero ? "Standby" : state.dlqPendingE > 0 ? `${state.nanErrorsPending || 50} Quarantined` : "50 Coalesced 0.0";
-  const triageActionText = isZero ? "Standby" : state.dlqPendingE > 0 ? "Surgical Replay Ready" : "DLQ Empty • Certified";
-  const ratioText = isZero ? "0 / 0 (0%)" : `${state.syncedS.toLocaleString("en-US")} / ${state.extractedN.toLocaleString("en-US")} (${Math.round((state.syncedS / Math.max(1, state.extractedN)) * 100)}%)`;
+  const errorsTrendText = isZero
+    ? "Standby: 0 Anomalies Held"
+    : state.dlqPendingE > 0
+      ? `${state.dlqPendingE} Quarantined (${state.emailErrorsPending || 150} Email, ${state.nanErrorsPending || 50} NaN)`
+      : state.dlqResolved > 0
+        ? `0 Held &bull; ${state.dlqResolved} Auto-Repaired`
+        : "0 Held &bull; Clean Ingestion";
+
+  const vipTrendText = isZero || state.vipBriefCount === 0
+    ? "0 Alerts &bull; Normal Margin Profile"
+    : `${state.vipBriefCount} VIPs with margin &lt; -20% (AI Briefs)`;
+
+  const repairedTrendText = isZero
+    ? "Standby: 0 Repaired"
+    : state.dlqResolved > 0
+      ? `${state.dlqResolved} Records Healed via Replay`
+      : "0 Repaired &bull; Awaiting Replay";
+
+  const guardrailsTrendText = isZero
+    ? "Standby &bull; Idempotency primed"
+    : state.skippedO > 0
+      ? `${state.skippedO.toLocaleString("en-US")} Calls Skipped &bull; 0 API Duplicates`
+      : "SHA-256 Incremental Diffing Active";
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Data Pulse | Executive Overview</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Data Pulse | Mission Control Console</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ["Inter", "sans-serif"], mono: ["JetBrains Mono", "monospace"] } } } };</script>
-  <style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap'); body { font-family: 'Inter', sans-serif; }</style>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    .kpi-card { transition: all 0.15s ease-in-out; }
+    .kpi-card-active { border-color: #18181b !important; box-shadow: 0 0 0 2px #18181b, 0 10px 15px -3px rgba(0, 0, 0, 0.1); background-color: #fafafa; }
+    .tier-bar-active { border-color: #059669 !important; box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.25); background-color: #ecfdf5; }
+  </style>
 </head>
 <body class="bg-zinc-50 text-zinc-950 min-h-screen antialiased flex flex-col">
-  <!-- Top Bar: Data Pulse Executive Console -->
-  <header class="border-b border-zinc-200 bg-white/90 backdrop-blur-md px-4 sm:px-6 py-3 flex flex-col xl:flex-row xl:items-center justify-between gap-3 sticky top-0 z-30 shadow-sm">
-    <div class="flex items-center justify-between w-full xl:w-auto">
-      <div class="flex items-center gap-3">
-        <div class="flex aspect-square size-9 items-center justify-center rounded-lg bg-zinc-950 text-white shadow-sm"><svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-8 4.5v9L12 21l8-4.5v-9L12 3Z"/><path d="M12 12 4 7.5"/><path d="m12 12 8-4.5"/><path d="M12 12v9"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg></div>
-        <div class="flex flex-col"><div class="flex items-center gap-2"><span class="text-sm font-bold tracking-tight text-zinc-950">Data Pulse</span><button type="button" class="info-btn text-zinc-400 hover:text-zinc-900 transition p-0.5" onclick="openInfoPopover('overview')"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button></div><div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span><span class="text-[11px] text-zinc-500 font-mono" id="sidebarEngine">Engine: DuckDB Local • 10k Mart</span></div></div>
+
+  <!-- Full-Width Header Bar with 4 Pipeline Action Buttons & Subtitle Explanations -->
+  <header class="border-b border-zinc-200 bg-white/95 backdrop-blur-md px-4 sm:px-6 py-3 sticky top-0 z-30 shadow-sm">
+    <div class="max-w-7xl mx-auto flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+      <!-- Left: Logo & Brand -->
+      <div class="flex items-center gap-3 shrink-0">
+        <div class="flex aspect-square size-9 items-center justify-center rounded-lg bg-zinc-950 text-white shadow-sm">
+          <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="m12 3-8 4.5v9L12 21l8-4.5v-9L12 3Z"/>
+            <path d="M12 12 4 7.5"/>
+            <path d="m12 12 8-4.5"/>
+            <path d="M12 12v9"/>
+            <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-bold tracking-tight text-zinc-950">Data Pulse</span>
+            <button type="button" class="info-tooltip-btn text-zinc-400 hover:text-zinc-900 transition p-0.5" data-topic="overview" onclick="openFloatingTooltip('overview', this, event)">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            </button>
+          </div>
+          <p class="text-[11px] text-zinc-500 font-mono">Reverse ETL Telemetry &amp; Mission Control</p>
+        </div>
       </div>
-    </div>
-    <div class="flex items-center gap-1.5 p-1 rounded-lg border border-zinc-200 bg-zinc-50 text-xs flex-wrap w-full xl:w-auto">
-      <button type="button" id="btnRunSync" onclick="triggerPipelinePhase('sync', this)" class="pipeline-step-btn px-3 py-1.5 rounded-md font-medium text-zinc-700 hover:bg-zinc-200 hover:text-zinc-950 transition flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-600"></span>1. Run Initial Sync (10k)</button>
-      <button type="button" id="btnRunRepair" onclick="triggerPipelinePhase('replay', this)" class="pipeline-step-btn px-3 py-1.5 rounded-md font-medium text-zinc-700 hover:bg-zinc-200 hover:text-zinc-950 transition flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-amber-500"></span>2. AI Diagnose &amp; Repair (200)</button>
-      <button type="button" id="btnRunIdemp" onclick="triggerPipelinePhase('idempotent', this)" class="pipeline-step-btn px-3 py-1.5 rounded-md font-medium text-zinc-700 hover:bg-zinc-200 hover:text-zinc-950 transition flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-600"></span>3. Verify SHA-256 Cache</button>
-      <button type="button" id="btnResetZero" onclick="triggerPipelinePhase('reset', this)" class="pipeline-step-btn px-3 py-1.5 rounded-md font-medium text-rose-600 hover:bg-rose-50 transition">Reset to 0</button>
-      <span id="pipelineSpinner" class="hidden text-zinc-500 font-mono text-[11px] animate-pulse px-1">Running Python Engine...</span>
-    </div>
-    <div class="flex items-center gap-2 flex-wrap w-full xl:w-auto justify-between xl:justify-end">
-      <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono font-medium bg-emerald-50 text-emerald-700 border border-emerald-200" id="phase-banner"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>${escapeHtml(state.currentPhase)}</div>
-      <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200" id="connPill"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600" id="connDot"></span><span id="connText">Connector Online</span></div>
-      <button id="togglePollingBtn" type="button" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100 transition"><span class="w-2 h-2 rounded-full bg-emerald-600" id="pollingDot"></span><span id="pollingStatusText">Auto-Refresh (1.5s)</span></button>
+
+      <!-- Center: 4 Real Pipeline Action Buttons with 1-Line Subtitle Explanations -->
+      <div class="flex items-center gap-2 flex-wrap w-full xl:w-auto">
+        <button type="button" id="btnRunSync" onclick="triggerPipelinePhase('sync', this)" class="pipeline-step-btn flex-1 sm:flex-initial text-left px-3 py-1.5 rounded-lg border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 hover:border-zinc-300 transition shadow-sm">
+          <div class="flex items-center gap-1.5 text-xs font-semibold text-zinc-900">
+            <span class="w-2 h-2 rounded-full bg-emerald-600"></span>
+            <span>1. Run Initial Sync</span>
+          </div>
+          <div class="text-[10px] text-zinc-500 mt-0.5 leading-tight">Extracts DuckDB rows &amp; syncs clean records to CRM</div>
+        </button>
+
+        <button type="button" id="btnRunRepair" onclick="triggerPipelinePhase('replay', this)" class="pipeline-step-btn flex-1 sm:flex-initial text-left px-3 py-1.5 rounded-lg border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 hover:border-zinc-300 transition shadow-sm">
+          <div class="flex items-center gap-1.5 text-xs font-semibold text-zinc-900">
+            <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+            <span>2. AI Diagnose &amp; Repair</span>
+          </div>
+          <div class="text-[10px] text-zinc-500 mt-0.5 leading-tight">Fixes quarantined emails/NaNs &amp; replays to CRM</div>
+        </button>
+
+        <button type="button" id="btnRunIdemp" onclick="triggerPipelinePhase('idempotent', this)" class="pipeline-step-btn flex-1 sm:flex-initial text-left px-3 py-1.5 rounded-lg border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 hover:border-zinc-300 transition shadow-sm">
+          <div class="flex items-center gap-1.5 text-xs font-semibold text-zinc-900">
+            <span class="w-2 h-2 rounded-full bg-blue-600"></span>
+            <span>3. Verify SHA-256 Cache</span>
+          </div>
+          <div class="text-[10px] text-zinc-500 mt-0.5 leading-tight">Runs incremental diffing (skips unchanged rows)</div>
+        </button>
+
+        <button type="button" id="btnResetZero" onclick="triggerPipelinePhase('reset', this)" class="pipeline-step-btn flex-1 sm:flex-initial text-left px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50/50 hover:bg-rose-100/70 hover:border-rose-300 text-rose-700 transition shadow-sm">
+          <div class="flex items-center gap-1.5 text-xs font-semibold">
+            <span class="w-2 h-2 rounded-full bg-rose-600"></span>
+            <span>Reset to 0</span>
+          </div>
+          <div class="text-[10px] text-rose-600/80 mt-0.5 leading-tight">Purges CRM store &amp; local DuckDB back to 0</div>
+        </button>
+
+        <span id="pipelineSpinner" class="hidden text-zinc-600 font-mono text-[11px] animate-pulse px-2 py-1 bg-zinc-100 rounded-md">Engine executing...</span>
+      </div>
+
+      <!-- Right: Online Health Pill -->
+      <div class="flex items-center gap-2 shrink-0 self-end xl:self-center">
+        <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200" id="connPill">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-600" id="connDot"></span>
+          <span id="connText">Connector Online</span>
+        </div>
+      </div>
     </div>
   </header>
 
-  <main class="flex-1 p-4 sm:p-6 space-y-5 sm:space-y-6 max-w-7xl mx-auto w-full" id="mainScrollContainer">
-    <!-- 4 KPI Cards Matching Screenshot Pattern -->
-    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-      <div class="rounded-xl border border-zinc-200 bg-white p-4 sm:p-5 shadow-sm">
-        <div class="flex items-center justify-between"><span class="text-xs font-medium text-zinc-500 flex items-center">Synced CRM Customers<button type="button" class="info-btn text-zinc-400 hover:text-zinc-900 transition p-0.5 ml-1" onclick="openInfoPopover('synced')"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button></span><span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200" id="kpi-synced-pill">${isZero ? "+0%" : state.totalSyncedContacts >= 10000 ? "+100%" : "+98.0%"}</span></div>
-        <div class="mt-3"><div class="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-950" id="kpi-synced">${state.totalSyncedContacts.toLocaleString("en-US")}</div><div class="mt-2 text-xs text-zinc-500" id="kpi-synced-trend">${syncedTrendHtml}</div></div>
+  <main class="flex-1 p-4 sm:p-6 space-y-5 sm:space-y-6 max-w-7xl mx-auto w-full">
+
+    <!-- 5 Big Top KPI Cards (Primary Interactive View/Filter Buttons) -->
+    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+      <!-- Card 1: All Synced Customers -->
+      <div id="cardAll" onclick="selectTabCard('all')" class="kpi-card kpi-card-active rounded-xl border border-zinc-200 bg-white p-4 shadow-sm cursor-pointer hover:border-zinc-400 select-none">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-zinc-600 flex items-center">
+            All Synced Customers
+            <button type="button" class="info-tooltip-btn text-zinc-400 hover:text-zinc-900 transition p-0.5 ml-1" data-topic="all" onclick="openFloatingTooltip('all', this, event)">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            </button>
+          </span>
+          <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-emerald-50 text-emerald-700 border border-emerald-200" id="badgeAll">${isZero ? "0%" : state.totalSyncedContacts >= 10000 ? "+100%" : "+98.0%"}</span>
+        </div>
+        <div class="mt-2.5">
+          <div class="text-2xl font-bold tracking-tight text-zinc-950 font-mono" id="kpiSynced">${state.totalSyncedContacts.toLocaleString("en-US")}</div>
+          <div class="mt-1 text-[11px] text-zinc-500" id="kpiSyncedTrend">${syncedTrendText}</div>
+        </div>
+        <div class="mt-3 pt-2 border-t border-zinc-100 flex items-center justify-between text-[10px] font-mono">
+          <span class="text-zinc-500">Filter View</span>
+          <span class="card-indicator font-semibold text-zinc-900">Active</span>
+        </div>
       </div>
-      <div class="rounded-xl border border-zinc-200 bg-white p-4 sm:p-5 shadow-sm">
-        <div class="flex items-center justify-between"><span class="text-xs font-medium text-zinc-500 flex items-center">VIP Accounts at Risk<button type="button" class="info-btn text-zinc-400 hover:text-zinc-900 transition p-0.5 ml-1" onclick="openInfoPopover('vip')"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button></span><span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200" id="kpi-vip-pill">${isZero ? "0%" : "-20.0%"}</span></div>
-        <div class="mt-3"><div class="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-950" id="kpi-vip">${state.vipBriefCount}</div><div class="mt-2 text-xs text-zinc-500" id="kpi-vip-trend">${vipTrendHtml}</div></div>
+
+      <!-- Card 2: Detected Errors (DLQ) -->
+      <div id="cardErrors" onclick="selectTabCard('errors')" class="kpi-card rounded-xl border border-zinc-200 bg-white p-4 shadow-sm cursor-pointer hover:border-zinc-400 select-none">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-zinc-600 flex items-center">
+            Detected Errors (DLQ)
+            <button type="button" class="info-tooltip-btn text-zinc-400 hover:text-zinc-900 transition p-0.5 ml-1" data-topic="errors" onclick="openFloatingTooltip('errors', this, event)">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            </button>
+          </span>
+          <span class="w-2.5 h-2.5 rounded-full ${isZero ? "bg-zinc-400" : state.dlqPendingE > 0 ? "bg-rose-600" : "bg-emerald-600"}" id="kpiErrorsDot"></span>
+        </div>
+        <div class="mt-2.5">
+          <div class="text-2xl font-bold tracking-tight font-mono ${state.dlqPendingE > 0 ? "text-rose-600" : "text-zinc-950"}" id="kpiErrors">${state.dlqPendingE}</div>
+          <div class="mt-1 text-[11px] text-zinc-500" id="kpiErrorsTrend">${errorsTrendText}</div>
+        </div>
+        <div class="mt-3 pt-2 border-t border-zinc-100 flex items-center justify-between text-[10px] font-mono">
+          <span class="text-zinc-500">Filter View</span>
+          <span class="card-indicator font-semibold text-zinc-400">Click to filter</span>
+        </div>
       </div>
-      <div class="rounded-xl border border-zinc-200 bg-white p-4 sm:p-5 shadow-sm">
-        <div class="flex items-center justify-between"><span class="text-xs font-medium text-zinc-500 flex items-center">Records Held for Review<button type="button" class="info-btn text-zinc-400 hover:text-zinc-900 transition p-0.5 ml-1" onclick="openInfoPopover('dlq')"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button></span><span class="w-2.5 h-2.5 rounded-full ${dlqDotColor}" id="kpi-dlq-dot"></span></div>
-        <div class="mt-3"><div class="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-950" id="kpi-dlq">${state.dlqPendingE}</div><div class="mt-2 text-xs" id="kpi-dlq-trend">${dlqTrendHtml}</div></div>
+
+      <!-- Card 3: VIP Retention Alerts -->
+      <div id="cardVip" onclick="selectTabCard('vip')" class="kpi-card rounded-xl border border-zinc-200 bg-white p-4 shadow-sm cursor-pointer hover:border-zinc-400 select-none">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-zinc-600 flex items-center">
+            VIP Retention Alerts
+            <button type="button" class="info-tooltip-btn text-zinc-400 hover:text-zinc-900 transition p-0.5 ml-1" data-topic="vip" onclick="openFloatingTooltip('vip', this, event)">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            </button>
+          </span>
+          <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-rose-50 text-rose-700 border border-rose-200">-20% Margin</span>
+        </div>
+        <div class="mt-2.5">
+          <div class="text-2xl font-bold tracking-tight text-zinc-950 font-mono" id="kpiVip">${state.vipBriefCount}</div>
+          <div class="mt-1 text-[11px] text-zinc-500" id="kpiVipTrend">${vipTrendText}</div>
+        </div>
+        <div class="mt-3 pt-2 border-t border-zinc-100 flex items-center justify-between text-[10px] font-mono">
+          <span class="text-zinc-500">Filter View</span>
+          <span class="card-indicator font-semibold text-zinc-400">Click to filter</span>
+        </div>
       </div>
-      <div class="rounded-xl border border-zinc-200 bg-white p-4 sm:p-5 shadow-sm">
-        <div class="flex items-center justify-between"><span class="text-xs font-medium text-zinc-500 flex items-center">Annual Cloud Savings<button type="button" class="info-btn text-zinc-400 hover:text-zinc-900 transition p-0.5 ml-1" onclick="openInfoPopover('savings')"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button></span><span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">+99.3%</span></div>
-        <div class="mt-3"><div class="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-950" id="kpi-savings">${savingsValue}</div><div class="mt-2 text-xs text-zinc-500" id="kpi-savings-trend">${savingsTrendHtml}</div></div>
+
+      <!-- Card 4: Auto-Repaired -->
+      <div id="cardRepaired" onclick="selectTabCard('repaired')" class="kpi-card rounded-xl border border-zinc-200 bg-white p-4 shadow-sm cursor-pointer hover:border-zinc-400 select-none">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-zinc-600 flex items-center">
+            Auto-Repaired
+            <button type="button" class="info-tooltip-btn text-zinc-400 hover:text-zinc-900 transition p-0.5 ml-1" data-topic="repaired" onclick="openFloatingTooltip('repaired', this, event)">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            </button>
+          </span>
+          <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-amber-50 text-amber-700 border border-amber-200">AI Replay</span>
+        </div>
+        <div class="mt-2.5">
+          <div class="text-2xl font-bold tracking-tight text-zinc-950 font-mono" id="kpiRepaired">${state.dlqResolved}</div>
+          <div class="mt-1 text-[11px] text-zinc-500" id="kpiRepairedTrend">${repairedTrendText}</div>
+        </div>
+        <div class="mt-3 pt-2 border-t border-zinc-100 flex items-center justify-between text-[10px] font-mono">
+          <span class="text-zinc-500">Filter View</span>
+          <span class="card-indicator font-semibold text-zinc-400">Click to filter</span>
+        </div>
+      </div>
+
+      <!-- Card 5: Pipeline & Cloud Guardrails -->
+      <div id="cardGuardrails" onclick="selectTabCard('guardrails')" class="kpi-card rounded-xl border border-zinc-200 bg-white p-4 shadow-sm cursor-pointer hover:border-zinc-400 select-none">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-zinc-600 flex items-center">
+            Pipeline &amp; Cloud Guardrails
+            <button type="button" class="info-tooltip-btn text-zinc-400 hover:text-zinc-900 transition p-0.5 ml-1" data-topic="guardrails" onclick="openFloatingTooltip('guardrails', this, event)">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            </button>
+          </span>
+          <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-blue-50 text-blue-700 border border-blue-200">SHA-256</span>
+        </div>
+        <div class="mt-2.5">
+          <div class="text-2xl font-bold tracking-tight text-zinc-950 font-mono" id="kpiSkipped">${state.skippedO.toLocaleString("en-US")} Skipped</div>
+          <div class="mt-1 text-[11px] text-zinc-500" id="kpiGuardrailsTrend">${guardrailsTrendText}</div>
+        </div>
+        <div class="mt-3 pt-2 border-t border-zinc-100 flex items-center justify-between text-[10px] font-mono">
+          <span class="text-zinc-500">Inspect View</span>
+          <span class="card-indicator font-semibold text-zinc-400">Click to inspect</span>
+        </div>
       </div>
     </section>
 
-    <!-- Shadcn Dual-Wave Area Chart: Synchronization & Delivery Progression (Screenshot Match) -->
-    <section class="rounded-xl border border-zinc-200 bg-white p-4 sm:p-6 shadow-sm">
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-zinc-100 gap-3">
-        <div>
-          <h2 class="text-base font-bold text-zinc-950">Data Pipeline Volume &amp; Synchronization Flow</h2>
-          <p class="text-xs text-zinc-500 mt-0.5">Continuous reverse-ETL ingestion progression across 100 batch micro-dispatches</p>
-        </div>
-        <div class="flex items-center gap-1.5 p-1 rounded-lg border border-zinc-200 bg-zinc-50 text-xs">
-          <button type="button" onclick="setChartMetric('delivered')" id="chartBtnDelivered" class="px-2.5 py-1 rounded font-medium bg-white text-zinc-950 shadow-sm transition">Delivered (S)</button>
-          <button type="button" onclick="setChartMetric('quarantined')" id="chartBtnDlq" class="px-2.5 py-1 rounded font-medium text-zinc-600 hover:text-zinc-950 transition">Quarantined (E)</button>
-          <button type="button" onclick="setChartMetric('combined')" id="chartBtnCombined" class="px-2.5 py-1 rounded font-medium text-zinc-600 hover:text-zinc-950 transition">All Flow</button>
-        </div>
-      </div>
-
-      <!-- Area Chart SVG Canvas -->
-      <div class="relative w-full h-56 pt-4">
-        <svg class="w-full h-full overflow-visible" id="areaChartSvg" viewBox="0 0 900 200" preserveAspectRatio="none">
-          <defs>
-            <linearGradient id="emeraldAreaGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#059669" stop-opacity="0.28" />
-              <stop offset="100%" stop-color="#059669" stop-opacity="0.0" />
-            </linearGradient>
-            <linearGradient id="roseAreaGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#e11d48" stop-opacity="0.25" />
-              <stop offset="100%" stop-color="#e11d48" stop-opacity="0.0" />
-            </linearGradient>
-          </defs>
-          <!-- Horizontal Baseline Grid Lines -->
-          <line x1="30" y1="40" x2="880" y2="40" stroke="#f4f4f5" stroke-width="1" />
-          <line x1="30" y1="90" x2="880" y2="90" stroke="#f4f4f5" stroke-width="1" />
-          <line x1="30" y1="140" x2="880" y2="140" stroke="#f4f4f5" stroke-width="1" />
-          <line x1="30" y1="180" x2="880" y2="180" stroke="#e4e4e7" stroke-width="1" />
-
-          <!-- Real Area Path & Stroke -->
-          <path id="chartAreaDelivered" fill="url(#emeraldAreaGradient)" d="M 30 180 L 880 180" />
-          <path id="chartPathDelivered" fill="none" stroke="#059669" stroke-width="2.5" stroke-linecap="round" d="M 30 180 L 880 180" />
-
-          <!-- Quarantine/DLQ Wave Path -->
-          <path id="chartAreaDlq" fill="url(#roseAreaGradient)" d="M 30 180 L 880 180" opacity="0.8" />
-          <path id="chartPathDlq" fill="none" stroke="#e11d48" stroke-width="2" stroke-linecap="round" d="M 30 180 L 880 180" opacity="0.8" />
-        </svg>
-        <div id="chartZeroOverlay" class="${isZero ? "flex" : "hidden"} absolute inset-0 items-center justify-center bg-white/60 backdrop-blur-[1px]">
-          <span class="px-3 py-1.5 rounded-full text-xs font-mono font-medium bg-zinc-100 text-zinc-600 border border-zinc-200 shadow-sm">Stage 0 Baseline • 0 lotes ingeridos — Ejecuta el sync para graficar</span>
-        </div>
-      </div>
-
-      <!-- X-Axis Labels -->
-      <div class="flex items-center justify-between text-[11px] font-mono text-zinc-400 mt-2 px-6">
-        <span>Lote 1</span><span>Lote 20</span><span>Lote 40</span><span>Lote 60</span><span>Lote 80</span><span>Lote 100</span>
-      </div>
-    </section>
-
-    <!-- 2-Column Interactive Power BI Analytics Grid -->
-    <section class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5" id="powerBiAnalyticsGrid">
-      <!-- Left Card: Net Profit & Revenue by Customer Segment -->
+    <!-- Real Data Engineer Telemetry Visualization (Pure HTML/CSS/SVG Bars) -->
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
+      <!-- Left Half: Ingestion & Quality Distribution Bar -->
       <div class="rounded-xl border border-zinc-200 bg-white p-4 sm:p-5 shadow-sm flex flex-col justify-between">
         <div>
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-zinc-100">
-            <div><h2 class="text-sm font-semibold text-zinc-950">Net Profit &amp; Revenue by Segment</h2><p class="text-xs text-zinc-500 mt-0.5">Click any segment bar to cross-filter the customer records table below.</p></div>
-            <button type="button" id="btnClearCrossFilter" onclick="clearSegmentFilter()" class="hidden self-start sm:self-auto px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition">Clear Filter</button>
+          <div class="flex items-center justify-between pb-3 border-b border-zinc-100">
+            <div>
+              <h2 class="text-sm font-semibold text-zinc-950 flex items-center gap-1.5">
+                Ingestion &amp; Quality Distribution
+                <button type="button" class="info-tooltip-btn text-zinc-400 hover:text-zinc-900 transition p-0.5" data-topic="distribution" onclick="openFloatingTooltip('distribution', this, event)">
+                  <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                </button>
+              </h2>
+              <p class="text-xs text-zinc-500 mt-0.5">Real-time proportions of clean deliveries, DLQ quarantine, repairs, and cache skips</p>
+            </div>
+            <span class="text-[11px] font-mono text-zinc-500" id="distributionTotalRatio">0 / 0 rows</span>
           </div>
-          <div class="space-y-3.5 mt-4" id="segmentBarsContainer">
-            <div class="segment-bar-row p-2.5 rounded-lg border border-zinc-200 hover:border-zinc-400 transition cursor-pointer" onclick="toggleSegmentFilter('ENTERPRISE_VIP')" id="barRow_ENTERPRISE_VIP">
-              <div class="flex items-center justify-between text-xs font-medium"><span class="text-zinc-900 font-semibold flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-rose-600"></span>Enterprise VIP</span><span class="font-mono text-rose-700" id="segNet_ENTERPRISE_VIP">${isZero ? "Net: $0.00" : `Net: -$${Math.abs(state.segmentBreakdown?.ENTERPRISE_VIP?.net_profitability_usd || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })} (-20.0% Risk)`}</span></div>
-              <div class="w-full bg-zinc-100 h-2 rounded-full mt-2 overflow-hidden"><div class="bg-rose-600 h-full rounded-full transition-all duration-500" id="barFill_ENTERPRISE_VIP" style="width: 0%"></div></div>
-              <div class="flex items-center justify-between text-[11px] text-zinc-500 mt-1 font-mono"><span id="segCount_ENTERPRISE_VIP">0 accounts</span><span id="segRev_ENTERPRISE_VIP">Rev: $0.00</span></div>
-            </div>
-            <div class="segment-bar-row p-2.5 rounded-lg border border-zinc-200 hover:border-zinc-400 transition cursor-pointer" onclick="toggleSegmentFilter('ENTERPRISE')" id="barRow_ENTERPRISE">
-              <div class="flex items-center justify-between text-xs font-medium"><span class="text-zinc-900 font-semibold flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-600"></span>Enterprise</span><span class="font-mono text-emerald-700" id="segNet_ENTERPRISE">Net: +$0.00</span></div>
-              <div class="w-full bg-zinc-100 h-2 rounded-full mt-2 overflow-hidden"><div class="bg-emerald-600 h-full rounded-full transition-all duration-500" id="barFill_ENTERPRISE" style="width: 0%"></div></div>
-              <div class="flex items-center justify-between text-[11px] text-zinc-500 mt-1 font-mono"><span id="segCount_ENTERPRISE">0 accounts</span><span id="segRev_ENTERPRISE">Rev: $0.00</span></div>
-            </div>
-            <div class="segment-bar-row p-2.5 rounded-lg border border-zinc-200 hover:border-zinc-400 transition cursor-pointer" onclick="toggleSegmentFilter('MID_MARKET')" id="barRow_MID_MARKET">
-              <div class="flex items-center justify-between text-xs font-medium"><span class="text-zinc-900 font-semibold flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-600"></span>Mid-Market</span><span class="font-mono text-emerald-700" id="segNet_MID_MARKET">Net: +$0.00</span></div>
-              <div class="w-full bg-zinc-100 h-2 rounded-full mt-2 overflow-hidden"><div class="bg-emerald-600 h-full rounded-full transition-all duration-500" id="barFill_MID_MARKET" style="width: 0%"></div></div>
-              <div class="flex items-center justify-between text-[11px] text-zinc-500 mt-1 font-mono"><span id="segCount_MID_MARKET">0 accounts</span><span id="segRev_MID_MARKET">Rev: $0.00</span></div>
-            </div>
-            <div class="segment-bar-row p-2.5 rounded-lg border border-zinc-200 hover:border-zinc-400 transition cursor-pointer" onclick="toggleSegmentFilter('SME')" id="barRow_SME">
-              <div class="flex items-center justify-between text-xs font-medium"><span class="text-zinc-900 font-semibold flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-600"></span>SME</span><span class="font-mono text-emerald-700" id="segNet_SME">Net: +$0.00</span></div>
-              <div class="w-full bg-zinc-100 h-2 rounded-full mt-2 overflow-hidden"><div class="bg-emerald-600 h-full rounded-full transition-all duration-500" id="barFill_SME" style="width: 0%"></div></div>
-              <div class="flex items-center justify-between text-[11px] text-zinc-500 mt-1 font-mono"><span id="segCount_SME">0 accounts</span><span id="segRev_SME">Rev: $0.00</span></div>
-            </div>
-          </div>
-        </div>
-        <div class="mt-4 pt-3 border-t border-zinc-100 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] font-mono text-zinc-500"><span>Cross-Filtering Active: <span id="activeFilterLabel" class="font-semibold text-zinc-900">None (All Records)</span></span><span id="totalSegmentRevSpan">Total Rev: $0.00</span></div>
-      </div>
 
-      <!-- Right Card: Data Delivery & Quarantine Triage Breakdown -->
-      <div class="rounded-xl border border-zinc-200 bg-white p-4 sm:p-5 shadow-sm flex flex-col justify-between">
-        <div>
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-zinc-100">
-            <div><h2 class="text-sm font-semibold text-zinc-950">Data Delivery &amp; Quarantine Triage</h2><p class="text-xs text-zinc-500 mt-0.5">Real-time row conservation and automated DLQ healing status.</p></div>
-            <span class="self-start sm:self-auto px-2 py-0.5 rounded-full text-[10px] font-mono font-medium ${triageBadgeClass}" id="triageBadge">${triageBadgeText}</span>
-          </div>
+          <!-- Segmented Progress Bar -->
           <div class="mt-4">
-            <div class="flex items-center justify-between text-xs font-medium mb-1.5"><span class="text-zinc-700 font-semibold">Row Conservation Balance</span><span class="font-mono text-zinc-500 text-[11px]" id="conservationRatioText">${ratioText}</span></div>
-            <div class="w-full bg-zinc-100 h-3 rounded-full overflow-hidden flex">
-              <div class="bg-emerald-600 h-full transition-all duration-500" id="progressClean" style="width: 0%"></div>
-              <div class="bg-amber-500 h-full transition-all duration-500" id="progressRepaired" style="width: 0%"></div>
-              <div class="bg-rose-600 h-full transition-all duration-500" id="progressHeld" style="width: 0%"></div>
-            </div>
-            <div class="flex items-center justify-between text-[11px] font-mono text-zinc-500 mt-2 flex-wrap gap-2">
-              <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-600"></span>Clean: <span id="cleanDeliveredCount">0</span></span>
-              <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-500"></span>Repaired: <span id="repairedCountProg">0</span></span>
-              <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-rose-600"></span>Held: <span id="heldCountProg">0</span></span>
+            <div class="w-full bg-zinc-100 h-3.5 rounded-full overflow-hidden flex shadow-inner">
+              <div id="barDeliveredClean" class="bg-emerald-600 h-full transition-all duration-300" style="width: 0%" title="Delivered Clean"></div>
+              <div id="barRepaired" class="bg-amber-500 h-full transition-all duration-300" style="width: 0%" title="Auto-Repaired"></div>
+              <div id="barQuarantined" class="bg-rose-600 h-full transition-all duration-300" style="width: 0%" title="Quarantined in DLQ"></div>
+              <div id="barSkipped" class="bg-blue-600 h-full transition-all duration-300" style="width: 0%" title="Skipped by SHA-256 Cache"></div>
             </div>
           </div>
-          <div class="space-y-2.5 mt-4 text-xs font-mono">
-            <div class="p-2.5 rounded-lg border border-zinc-200 bg-zinc-50/50">
-              <div class="flex items-center justify-between"><span class="text-zinc-900 font-semibold flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-rose-600"></span>1. Invalid Email Format (<span id="triageEmailCountText">${isZero ? 0 : state.emailErrorsPending || 150}</span> rows)</span><span class="text-zinc-500 text-[11px]" id="triageEmailStatus">${triageEmailStatusText}</span></div>
-              <div class="text-[11px] text-zinc-500 mt-1">CUST-09801..09950 • <code class="text-emerald-700 font-semibold">REGEXP_REPLACE(email, '@@', '@')</code></div>
+
+          <!-- 4 Telemetry Metrics Breakdown -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-4 text-xs font-mono">
+            <div class="p-2 rounded-lg border border-zinc-200 bg-zinc-50/60">
+              <div class="flex items-center gap-1.5 text-zinc-700 font-semibold">
+                <span class="w-2 h-2 rounded-full bg-emerald-600 shrink-0"></span>
+                <span>Clean</span>
+              </div>
+              <div class="mt-1 font-bold text-zinc-950 text-sm" id="countDeliveredClean">0</div>
+              <div class="text-[10px] text-zinc-500" id="pctDeliveredClean">0% of extracted</div>
             </div>
-            <div class="p-2.5 rounded-lg border border-zinc-200 bg-zinc-50/50">
-              <div class="flex items-center justify-between"><span class="text-zinc-900 font-semibold flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-amber-500"></span>2. NaN Division by Zero (<span id="triageNanCountText">${isZero ? 0 : state.nanErrorsPending || 50}</span> rows)</span><span class="text-zinc-500 text-[11px]" id="triageNanStatus">${triageNanStatusText}</span></div>
-              <div class="text-[11px] text-zinc-500 mt-1">CUST-09951..10000 • <code class="text-emerald-700 font-semibold">COALESCE(NULLIF(margin, 'NaN'), 0.0)</code></div>
+
+            <div class="p-2 rounded-lg border border-zinc-200 bg-zinc-50/60">
+              <div class="flex items-center gap-1.5 text-zinc-700 font-semibold">
+                <span class="w-2 h-2 rounded-full bg-rose-600 shrink-0"></span>
+                <span>Quarantined</span>
+              </div>
+              <div class="mt-1 font-bold text-zinc-950 text-sm" id="countQuarantined">0</div>
+              <div class="text-[10px] text-zinc-500" id="descQuarantined">150 Email &bull; 50 NaN</div>
+            </div>
+
+            <div class="p-2 rounded-lg border border-zinc-200 bg-zinc-50/60">
+              <div class="flex items-center gap-1.5 text-zinc-700 font-semibold">
+                <span class="w-2 h-2 rounded-full bg-amber-500 shrink-0"></span>
+                <span>Repaired</span>
+              </div>
+              <div class="mt-1 font-bold text-zinc-950 text-sm" id="countRepaired">0</div>
+              <div class="text-[10px] text-zinc-500" id="descRepaired">AI Replay to CRM</div>
+            </div>
+
+            <div class="p-2 rounded-lg border border-zinc-200 bg-zinc-50/60">
+              <div class="flex items-center gap-1.5 text-zinc-700 font-semibold">
+                <span class="w-2 h-2 rounded-full bg-blue-600 shrink-0"></span>
+                <span>Skipped</span>
+              </div>
+              <div class="mt-1 font-bold text-zinc-950 text-sm" id="countSkipped">0</div>
+              <div class="text-[10px] text-zinc-500" id="descSkipped">Saved API calls</div>
             </div>
           </div>
         </div>
-        <div class="mt-4 pt-3 border-t border-zinc-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <button type="button" id="btnRepairNow" onclick="triggerPipelinePhase('replay', this)" class="${isZero || state.dlqPendingE === 0 ? "hidden" : "px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium transition flex items-center justify-center gap-1.5 shadow-sm"}">
-            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 12 2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
-            <span>Repair Held Records Now</span>
-          </button>
-          <span class="text-xs font-mono text-zinc-500" id="triageActionStatus">${triageActionText}</span>
+
+        <div class="mt-4 pt-3 border-t border-zinc-100 flex items-center justify-between text-[11px] font-mono text-zinc-500">
+          <span>Quarantine Rules: RFC-5322 regex sanitization &amp; NaN safe-coalesce</span>
+          <span id="distributionHealthStatus" class="font-semibold text-emerald-700">Healthy Rhythm</span>
+        </div>
+      </div>
+
+      <!-- Right Half: Net Profitability & Volume by Customer Tier -->
+      <div class="rounded-xl border border-zinc-200 bg-white p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between pb-3 border-b border-zinc-100">
+            <div>
+              <h2 class="text-sm font-semibold text-zinc-950 flex items-center gap-1.5">
+                Net Profitability &amp; Volume by Tier
+                <button type="button" class="info-tooltip-btn text-zinc-400 hover:text-zinc-900 transition p-0.5" data-topic="tiers" onclick="openFloatingTooltip('tiers', this, event)">
+                  <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                </button>
+              </h2>
+              <p class="text-xs text-zinc-500 mt-0.5">Click any segment bar to filter customer records table below</p>
+            </div>
+            <button type="button" id="btnClearTierFilter" onclick="clearTierFilter()" class="hidden px-2 py-0.5 rounded text-[11px] font-medium bg-zinc-900 text-white hover:bg-zinc-800 transition">Clear Filter</button>
+          </div>
+
+          <!-- 4 Tier Comparison Bars -->
+          <div class="space-y-2.5 mt-3">
+            <!-- ENTERPRISE_VIP -->
+            <div id="barRow_ENTERPRISE_VIP" onclick="toggleTierFilter('ENTERPRISE_VIP')" class="tier-bar-row p-2 rounded-lg border border-zinc-200 hover:border-zinc-400 transition cursor-pointer">
+              <div class="flex items-center justify-between text-xs font-medium">
+                <span class="text-zinc-900 font-semibold flex items-center gap-1.5">
+                  <span class="w-2 h-2 rounded-full bg-rose-600"></span>Enterprise VIP
+                </span>
+                <span class="font-mono text-rose-700 font-semibold" id="segNet_ENTERPRISE_VIP">Net: $0.00</span>
+              </div>
+              <div class="w-full bg-zinc-100 h-2 rounded-full mt-1.5 overflow-hidden">
+                <div class="bg-rose-600 h-full rounded-full transition-all duration-300" id="barFill_ENTERPRISE_VIP" style="width: 0%"></div>
+              </div>
+              <div class="flex items-center justify-between text-[11px] text-zinc-500 mt-1 font-mono">
+                <span id="segCount_ENTERPRISE_VIP">0 accounts</span>
+                <span id="segRev_ENTERPRISE_VIP">Rev: $0.00</span>
+              </div>
+            </div>
+
+            <!-- ENTERPRISE -->
+            <div id="barRow_ENTERPRISE" onclick="toggleTierFilter('ENTERPRISE')" class="tier-bar-row p-2 rounded-lg border border-zinc-200 hover:border-zinc-400 transition cursor-pointer">
+              <div class="flex items-center justify-between text-xs font-medium">
+                <span class="text-zinc-900 font-semibold flex items-center gap-1.5">
+                  <span class="w-2 h-2 rounded-full bg-emerald-600"></span>Enterprise
+                </span>
+                <span class="font-mono text-emerald-700 font-semibold" id="segNet_ENTERPRISE">Net: $0.00</span>
+              </div>
+              <div class="w-full bg-zinc-100 h-2 rounded-full mt-1.5 overflow-hidden">
+                <div class="bg-emerald-600 h-full rounded-full transition-all duration-300" id="barFill_ENTERPRISE" style="width: 0%"></div>
+              </div>
+              <div class="flex items-center justify-between text-[11px] text-zinc-500 mt-1 font-mono">
+                <span id="segCount_ENTERPRISE">0 accounts</span>
+                <span id="segRev_ENTERPRISE">Rev: $0.00</span>
+              </div>
+            </div>
+
+            <!-- MID_MARKET -->
+            <div id="barRow_MID_MARKET" onclick="toggleTierFilter('MID_MARKET')" class="tier-bar-row p-2 rounded-lg border border-zinc-200 hover:border-zinc-400 transition cursor-pointer">
+              <div class="flex items-center justify-between text-xs font-medium">
+                <span class="text-zinc-900 font-semibold flex items-center gap-1.5">
+                  <span class="w-2 h-2 rounded-full bg-emerald-600"></span>Mid-Market
+                </span>
+                <span class="font-mono text-emerald-700 font-semibold" id="segNet_MID_MARKET">Net: $0.00</span>
+              </div>
+              <div class="w-full bg-zinc-100 h-2 rounded-full mt-1.5 overflow-hidden">
+                <div class="bg-emerald-600 h-full rounded-full transition-all duration-300" id="barFill_MID_MARKET" style="width: 0%"></div>
+              </div>
+              <div class="flex items-center justify-between text-[11px] text-zinc-500 mt-1 font-mono">
+                <span id="segCount_MID_MARKET">0 accounts</span>
+                <span id="segRev_MID_MARKET">Rev: $0.00</span>
+              </div>
+            </div>
+
+            <!-- SME -->
+            <div id="barRow_SME" onclick="toggleTierFilter('SME')" class="tier-bar-row p-2 rounded-lg border border-zinc-200 hover:border-zinc-400 transition cursor-pointer">
+              <div class="flex items-center justify-between text-xs font-medium">
+                <span class="text-zinc-900 font-semibold flex items-center gap-1.5">
+                  <span class="w-2 h-2 rounded-full bg-emerald-600"></span>SME
+                </span>
+                <span class="font-mono text-emerald-700 font-semibold" id="segNet_SME">Net: $0.00</span>
+              </div>
+              <div class="w-full bg-zinc-100 h-2 rounded-full mt-1.5 overflow-hidden">
+                <div class="bg-emerald-600 h-full rounded-full transition-all duration-300" id="barFill_SME" style="width: 0%"></div>
+              </div>
+              <div class="flex items-center justify-between text-[11px] text-zinc-500 mt-1 font-mono">
+                <span id="segCount_SME">0 accounts</span>
+                <span id="segRev_SME">Rev: $0.00</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-3 pt-3 border-t border-zinc-100 flex items-center justify-between text-[11px] font-mono text-zinc-500">
+          <span>Active Filter: <span id="activeTierLabel" class="font-semibold text-zinc-900">None (All Tiers)</span></span>
+          <span id="totalSegmentRevSpan">Total Rev: $0.00</span>
         </div>
       </div>
     </section>
 
-    <!-- Warehouse Records Table (Matching Screenshot Table & Tabs) -->
-    <section class="rounded-xl border border-zinc-200 bg-white overflow-hidden shadow-sm" id="customer-table-section">
-      <div class="p-3.5 sm:p-4 border-b border-zinc-200 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-        <div class="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 w-full lg:w-auto scrollbar-none">
-          <button type="button" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition bg-zinc-950 text-white shadow-sm shrink-0" data-tab="all">All Warehouse Records (<span id="tabCountAll">${state.totalSyncedContacts.toLocaleString("en-US")}</span>)</button>
-          <button type="button" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-600 hover:text-zinc-950 transition inline-flex items-center shrink-0" data-tab="vip"><span class="w-1.5 h-1.5 rounded-full bg-rose-600 mr-1.5"></span>VIP Risk Alerts (<span id="tabCountVip">${state.vipBriefCount}</span>)</button>
-          <button type="button" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-600 hover:text-zinc-950 transition inline-flex items-center shrink-0" data-tab="repaired"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>DLQ Repaired (<span id="tabCountRepaired">${state.dlqResolved}</span>)</button>
-          <button type="button" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-600 hover:text-zinc-950 transition inline-flex items-center shrink-0" data-tab="health"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>Pipeline Architecture &amp; SLA (4)</button>
-        </div>
-        <div class="flex items-center gap-2 w-full lg:w-auto">
-          <button type="button" onclick="openInfoPopover('schema')" class="px-2.5 py-1.5 rounded-lg border border-zinc-200 bg-white text-xs font-medium text-zinc-700 hover:bg-zinc-100 transition shrink-0 flex items-center gap-1.5">
-            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-            <span>Schema Mapping</span>
-            <svg class="w-3 h-3 text-zinc-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
-          </button>
-          <div class="relative w-full lg:w-64" id="filterContainer">
-            <input type="search" id="filterInput" value="${escapeHtml(initialFilter)}" placeholder="Filtrar por ID, empresa, tier..." class="w-full px-3 py-1.5 pl-8 rounded-lg text-xs font-mono bg-zinc-50 border border-zinc-200 text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400" />
+    <!-- Main Data Section: Customer Table OR Pipeline Guardrails Inspection -->
+    <section class="rounded-xl border border-zinc-200 bg-white overflow-hidden shadow-sm">
+      <!-- Controls Toolbar (Search, Sort, Row Limit, Schema Mapping) -->
+      <div id="tableToolbar" class="p-3.5 sm:p-4 border-b border-zinc-200 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white">
+        <div class="flex items-center gap-2 flex-1 max-w-lg">
+          <div class="relative w-full">
+            <input type="search" id="tableSearchInput" value="${escapeHtml(initialFilter)}" placeholder="Search by ID, email, company, tier, or error message..." class="w-full px-3 py-1.5 pl-8 rounded-lg text-xs font-mono bg-zinc-50 border border-zinc-200 text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400" />
             <svg class="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
           </div>
         </div>
+
+        <div class="flex items-center gap-2 flex-wrap">
+          <!-- Sort Selector -->
+          <div class="flex items-center gap-1.5 text-xs text-zinc-600">
+            <label for="sortSelect" class="sr-only">Sort</label>
+            <select id="sortSelect" class="px-2.5 py-1.5 rounded-lg border border-zinc-200 bg-zinc-50 text-xs font-medium text-zinc-800 focus:outline-none focus:ring-1 focus:ring-zinc-400">
+              <option value="id_asc">Sort: Customer ID (Asc)</option>
+              <option value="id_desc">Sort: Customer ID (Desc)</option>
+              <option value="profit_desc">Sort: Net Profit (High to Low)</option>
+              <option value="profit_asc">Sort: Net Profit (Low to High)</option>
+              <option value="margin_desc">Sort: Margin % (High to Low)</option>
+              <option value="margin_asc">Sort: Margin % (Low to High)</option>
+            </select>
+          </div>
+
+          <!-- Row Limit Selector -->
+          <div class="flex items-center gap-1.5 text-xs text-zinc-600">
+            <label for="rowsSelect" class="sr-only">Rows</label>
+            <select id="rowsSelect" class="px-2.5 py-1.5 rounded-lg border border-zinc-200 bg-zinc-50 text-xs font-medium text-zinc-800 focus:outline-none focus:ring-1 focus:ring-zinc-400">
+              <option value="25">25 rows</option>
+              <option value="50">50 rows</option>
+              <option value="100">100 rows</option>
+            </select>
+          </div>
+
+          <!-- Schema Mapping Button -->
+          <button type="button" id="btnSchemaMapping" onclick="openFloatingTooltip('schema', this, event)" class="px-2.5 py-1.5 rounded-lg border border-zinc-200 bg-white text-xs font-medium text-zinc-700 hover:bg-zinc-100 transition shrink-0 flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+            <span>Schema Mapping</span>
+          </button>
+        </div>
       </div>
 
-      <div class="overflow-x-auto w-full" id="customersTableWrapper">
-        <table class="w-full text-left border-collapse min-w-[760px]">
+      <!-- Customer Data Table Container -->
+      <div id="customerTableContainer" class="overflow-x-auto w-full">
+        <table class="w-full text-left border-collapse min-w-[760px]" id="customersTable">
           <thead>
-            <tr class="border-b border-zinc-200 bg-zinc-50/70 text-[11px] font-mono uppercase text-zinc-500">
+            <tr class="border-b border-zinc-200 bg-zinc-50/70 text-[11px] font-mono uppercase text-zinc-500" id="tableHeaderRow">
               <th class="p-3 text-center w-10"><input type="checkbox" class="rounded border-zinc-300 text-zinc-900 focus:ring-0" /></th>
               <th class="p-3 font-medium">Record Identifier &amp; Source</th>
               <th class="p-3 font-medium">Segment Tier</th>
@@ -320,498 +574,909 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
         </table>
       </div>
 
-      <!-- Pagination & Block Loader Bar -->
-      <div class="p-3.5 border-t border-zinc-200 flex flex-col sm:flex-row items-center justify-between gap-3 bg-zinc-50/50" id="tablePaginationBar">
-        <div class="text-xs text-zinc-600 font-mono">
-          Mostrando <span id="pageRangeSpan" class="font-bold text-zinc-900">1 - ${isZero ? 0 : Math.min(25, state.totalSyncedContacts)}</span> de <span id="pageTotalSpan" class="font-bold text-zinc-900">${state.totalSyncedContacts.toLocaleString("en-US")}</span> registros
-        </div>
-        <div class="flex items-center gap-2 flex-wrap justify-center sm:justify-end">
-          <button type="button" id="btnPrevPage" class="px-3 py-1.5 rounded-lg border border-zinc-200 bg-white text-xs font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-40 transition" disabled>&larr; Anterior</button>
-          <button type="button" id="btnNextPage" class="px-3 py-1.5 rounded-lg border border-zinc-200 bg-white text-xs font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-40 transition" ${state.totalSyncedContacts <= 25 ? "disabled" : ""}>Siguiente &rarr;</button>
-          <button type="button" id="btnLoadMore" class="px-3 py-1.5 rounded-lg bg-zinc-950 text-white text-xs font-medium hover:bg-zinc-800 disabled:opacity-40 transition flex items-center gap-1.5" ${state.totalSyncedContacts <= 25 ? "disabled" : ""}>
-            <span>Cargar m&aacute;s bloques</span><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
-          </button>
+      <!-- Pipeline & Cloud Guardrails Inspection View (Card 5 Active) -->
+      <div id="guardrailsViewContainer" class="hidden p-4 sm:p-5 overflow-x-auto">
+        <div class="rounded-xl border border-zinc-200 overflow-hidden bg-white min-w-[700px]">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="border-b border-zinc-200 bg-zinc-50/70 text-[11px] font-mono uppercase text-zinc-500">
+                <th class="p-3 font-medium">Architecture Pillar &amp; Component</th>
+                <th class="p-3 font-medium">Execution Engine &amp; SLA</th>
+                <th class="p-3 font-medium">Guardrail Policy &amp; Metrics</th>
+                <th class="p-3 font-medium">Operational Status</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-zinc-200/70 text-xs">
+              <tr>
+                <td class="p-3 font-medium text-zinc-900">
+                  <div class="font-semibold text-zinc-950">Pillar 1: Warehouse &amp; FinOps Guardrails</div>
+                  <div class="text-[11px] text-zinc-500 font-mono">Snowflake (WH_DATA_PULSE_XS) &amp; DuckDB Embedded</div>
+                </td>
+                <td class="p-3 font-mono text-zinc-700">AUTO_SUSPEND=60s &bull; TIMEOUT=300s</td>
+                <td class="p-3 text-zinc-700">50 Credits ($150 Cap) &bull; Cost: $2.50/mo active compute</td>
+                <td class="p-3"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>Active &amp; Guarded</span></td>
+              </tr>
+              <tr>
+                <td class="p-3 font-medium text-zinc-900">
+                  <div class="font-semibold text-zinc-950">Pillar 2: Apache Airflow Thin DAG</div>
+                  <div class="text-[11px] text-zinc-500 font-mono">DAG ID: datapulse_hubspot_profitability_sync</div>
+                </td>
+                <td class="p-3 font-mono text-zinc-700">SLA: &lt;0.05s parse SLA</td>
+                <td class="p-3 text-zinc-700">3 Tasks: validate_sync_manifest &rarr; execute_incremental_reverse_etl &rarr; audit_dlq_and_finops_telemetry</td>
+                <td class="p-3"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>Healthy (0 * * * *)</span></td>
+              </tr>
+              <tr>
+                <td class="p-3 font-medium text-zinc-900">
+                  <div class="font-semibold text-zinc-950">Pillar 3: Data Delivery Balance</div>
+                  <div class="text-[11px] text-zinc-500 font-mono" id="guardrailBalanceText">Extracted: ${state.extractedN} | Delivered: ${state.syncedS} | Skipped: ${state.skippedO} | Held: ${state.dlqPendingE}</div>
+                </td>
+                <td class="p-3 font-mono text-zinc-700">Out-of-Band Replay &bull; Zero Impact on Sync SLA</td>
+                <td class="p-3 text-zinc-700">Auto-Remediates 150 Invalid Emails (RFC-5322 regex) &amp; 50 NaN Margin Records (coalesce to 0.0)</td>
+                <td class="p-3"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>Balanced &amp; Certified</span></td>
+              </tr>
+              <tr>
+                <td class="p-3 font-medium text-zinc-900">
+                  <div class="font-semibold text-zinc-950">Pillar 4 (HubSpot CRM v3 Store)</div>
+                  <div class="text-[11px] text-zinc-500 font-mono">Endpoint: /crm/v3/objects/contacts/batch/upsert</div>
+                </td>
+                <td class="p-3 font-mono text-zinc-700">100 records / batch &bull; Token Bucket Rate Limiter</td>
+                <td class="p-3 text-zinc-700">HMAC-SHA256 Webhook Verification &bull; 429 Retry Backoff (Full Jitter) &bull; SHA-256 Idempotency Cache</td>
+                <td class="p-3"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>Connected &amp; Synced</span></td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
-      <!-- Pipeline Architecture & Cloud Health View (Tab 4) -->
-      <div id="healthTableWrapper" class="hidden p-4 sm:p-5 overflow-x-auto">
-        <div class="rounded-xl border border-zinc-200 overflow-hidden bg-white min-w-[700px]">
-          <table class="w-full text-left border-collapse">
-            <thead><tr class="border-b border-zinc-200 bg-zinc-50/70 text-[11px] font-mono uppercase text-zinc-500"><th class="p-3 font-medium">Architecture Pillar &amp; Component</th><th class="p-3 font-medium">Execution Engine &amp; SLA</th><th class="p-3 font-medium">Guardrail Policy &amp; Metrics</th><th class="p-3 font-medium">Operational Status</th></tr></thead>
-            <tbody class="divide-y divide-zinc-200/70 text-xs">
-              <tr><td class="p-3 font-medium text-zinc-900"><div class="font-semibold text-zinc-950">Pillar 1: Warehouse &amp; FinOps Guardrails</div><div class="text-[11px] text-zinc-500 font-mono">Snowflake (WH_DATA_PULSE_XS) &amp; DuckDB Embedded</div></td><td class="p-3 font-mono text-zinc-700">AUTO_SUSPEND=60s • TIMEOUT=300s</td><td class="p-3 text-zinc-700">50 Credits ($150 Cap) • Cost: $2.50/mo vs $4,200/yr SaaS</td><td class="p-3"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>Active &amp; Guarded</span></td></tr>
-              <tr><td class="p-3 font-medium text-zinc-900"><div class="font-semibold text-zinc-950">Pillar 2: Apache Airflow Thin DAG</div><div class="text-[11px] text-zinc-500 font-mono">DAG ID: datapulse_hubspot_profitability_sync</div></td><td class="p-3 font-mono text-zinc-700">SLA: &lt;0.05s parse SLA</td><td class="p-3 text-zinc-700">3 Tasks: 1. validate_sync_manifest, 2. execute_incremental_reverse_etl, 3. audit_dlq_and_finops_telemetry</td><td class="p-3"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>Healthy (0 * * * *)</span></td></tr>
-              <tr><td class="p-3 font-medium text-zinc-900"><div class="font-semibold text-zinc-950">Pillar 3: Data Delivery Balance</div><div class="text-[11px] text-zinc-500 font-mono" id="pillar3BalanceText">Extracted: ${state.extractedN} | Delivered: ${state.syncedS} | Unchanged Skipped: ${state.skippedO} | Held: ${state.dlqPendingE}</div></td><td class="p-3 font-mono text-zinc-700">Out-of-Band Replay • Zero Impact on Sync SLA</td><td class="p-3 text-zinc-700">Auto-Remediates 150 Invalid Emails (RFC-5322 regex) &amp; 50 NaN Margin Records (coalesce to 0.0)</td><td class="p-3"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>Balanced &amp; Certified</span></td></tr>
-              <tr><td class="p-3 font-medium text-zinc-900"><div class="font-semibold text-zinc-950">Pillar 4 (HubSpot CRM v3 Store)</div><div class="text-[11px] text-zinc-500 font-mono">Batch Upsert Endpoint: /crm/v3/objects/contacts/batch/upsert</div></td><td class="p-3 font-mono text-zinc-700">100 records / batch • Token Bucket Rate Limiter</td><td class="p-3 text-zinc-700">HMAC-SHA256 Webhook Verification • 429 Retry Backoff (Full Jitter) • SHA-256 Idempotency Cache</td><td class="p-3"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>Connected &amp; Synced</span></td></tr>
-            </tbody>
-          </table>
+      <!-- Pagination Bar -->
+      <div id="tablePaginationBar" class="p-3.5 border-t border-zinc-200 flex flex-col sm:flex-row items-center justify-between gap-3 bg-zinc-50/50">
+        <div class="text-xs text-zinc-600 font-mono" id="pageInfoText">
+          ${isZero ? "0 matched records" : `Showing rows 1–${Math.min(25, state.totalSyncedContacts)} of ${state.totalSyncedContacts.toLocaleString("en-US")} matched records (Page 1 of ${Math.max(1, Math.ceil(state.totalSyncedContacts / 25))})`}
+        </div>
+        <div class="flex items-center gap-1.5">
+          <button type="button" id="btnFirst" class="px-2.5 py-1.5 rounded-lg border border-zinc-200 bg-white text-xs font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-40 transition" disabled>&laquo; First</button>
+          <button type="button" id="btnPrev" class="px-2.5 py-1.5 rounded-lg border border-zinc-200 bg-white text-xs font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-40 transition" disabled>&lsaquo; Prev</button>
+          <button type="button" id="btnNext" class="px-2.5 py-1.5 rounded-lg border border-zinc-200 bg-white text-xs font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-40 transition" ${state.totalSyncedContacts <= 25 ? "disabled" : ""}>Next &rsaquo;</button>
+          <button type="button" id="btnLast" class="px-2.5 py-1.5 rounded-lg border border-zinc-200 bg-white text-xs font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-40 transition" ${state.totalSyncedContacts <= 25 ? "disabled" : ""}>Last &raquo;</button>
         </div>
       </div>
     </section>
   </main>
 
-  <!-- Info Modal Popover (Also houses Schema Mapping) -->
-  <div id="infoPopoverBackdrop" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 hidden opacity-0 transition-opacity duration-150 flex items-center justify-center p-4">
-    <div id="infoPopoverCard" class="bg-white border border-zinc-200 rounded-xl shadow-2xl max-w-lg w-full p-5 sm:p-6 transform scale-95 transition-transform duration-150 max-h-[90vh] overflow-y-auto">
-      <div class="flex items-start justify-between pb-3 border-b border-zinc-100">
-        <div class="flex items-center gap-2.5"><div class="w-8 h-8 rounded-lg bg-zinc-100 flex items-center justify-center text-zinc-900"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></div><div><h3 class="text-sm font-semibold text-zinc-950" id="infoModalTitle">Metric Title</h3><p class="text-xs text-zinc-500">Power BI Executive Clarity &amp; System Architecture</p></div></div>
-        <button id="closeInfoBtn" type="button" class="text-zinc-400 hover:text-zinc-600 p-1 rounded-md hover:bg-zinc-100 transition"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+  <!-- Non-Blocking Floating Anchored Tooltip Card (Zero Dark Backdrop) -->
+  <div id="floatingTooltip" class="fixed z-50 w-80 bg-white border border-zinc-200 rounded-xl shadow-2xl p-4 hidden text-xs transition-opacity duration-150">
+    <div class="flex items-start justify-between pb-2.5 border-b border-zinc-100">
+      <div>
+        <h3 class="text-xs font-bold text-zinc-950" id="tooltipTitle">Metric Details</h3>
+        <p class="text-[10px] text-zinc-500">Power BI Clarity &amp; Architectural Context</p>
       </div>
-      <div class="mt-4 space-y-4 text-xs">
-        <div class="rounded-lg bg-emerald-50 border border-emerald-200/60 p-3.5"><div class="flex items-center gap-2 font-semibold text-emerald-900 mb-1.5"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Plain-English Business Meaning</div><p class="text-zinc-700 leading-relaxed" id="infoModalBusiness">-</p></div>
-        <div class="rounded-lg bg-zinc-50 border border-zinc-200 p-3.5"><div class="flex items-center gap-2 font-semibold text-zinc-900 mb-1.5"><svg class="w-4 h-4 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg>Under-the-Hood Technical Detail</div><p class="text-zinc-600 font-mono text-[11px] leading-relaxed" id="infoModalTech">-</p></div>
+      <button type="button" onclick="closeFloatingTooltip()" class="text-zinc-400 hover:text-zinc-700 p-0.5 rounded hover:bg-zinc-100 transition">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </div>
+    <div class="mt-3 space-y-2.5">
+      <div class="rounded-lg bg-emerald-50/70 border border-emerald-200/60 p-2.5">
+        <div class="font-semibold text-emerald-900 mb-1 flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+          <span>Business Meaning</span>
+        </div>
+        <p class="text-zinc-700 text-[11px] leading-relaxed" id="tooltipBusiness">-</p>
       </div>
-      <div class="mt-5 flex justify-end"><button id="closeInfoBtn2" type="button" class="px-3.5 py-1.5 rounded-md text-xs font-medium bg-zinc-950 text-white hover:bg-zinc-800 transition">Understood</button></div>
+      <div class="rounded-lg bg-zinc-50 border border-zinc-200 p-2.5">
+        <div class="font-semibold text-zinc-900 mb-1 flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5 text-zinc-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg>
+          <span>Technical Implementation</span>
+        </div>
+        <p class="text-zinc-600 font-mono text-[10px] leading-relaxed" id="tooltipTech">-</p>
+      </div>
     </div>
   </div>
 
-  <!-- Inspector Slide-Over Drawer -->
-  <div id="drawerBackdrop" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 hidden opacity-0 transition-opacity duration-200"></div>
+  <!-- Slide-Over Inspector Drawer for Customer / Error Records -->
+  <div id="drawerBackdrop" class="fixed inset-0 bg-black/30 backdrop-blur-[1px] z-40 hidden opacity-0 transition-opacity duration-200"></div>
   <aside id="inspectorDrawer" class="fixed right-0 top-0 bottom-0 w-full sm:max-w-xl bg-white border-l border-zinc-200 shadow-2xl z-50 transform translate-x-full transition-transform duration-300 ease-out flex flex-col">
     <div class="flex items-center justify-between p-4 border-b border-zinc-200">
-      <div class="flex items-center gap-2"><div class="w-7 h-7 rounded-md bg-zinc-100 flex items-center justify-center text-zinc-900"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><h2 class="text-sm font-bold text-zinc-950" id="drawerTitle">Record Payload Inspector</h2></div>
-      <button id="closeDrawerBtn" type="button" class="p-1.5 rounded-md text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 transition"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+      <div class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded-md bg-zinc-100 flex items-center justify-center text-zinc-900">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </div>
+        <h2 class="text-sm font-bold text-zinc-950" id="drawerTitle">Record Payload Inspector</h2>
+      </div>
+      <button id="closeDrawerBtn" onclick="closeInspector()" type="button" class="p-1.5 rounded-md text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 transition">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
     </div>
     <div class="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 font-mono text-xs">
-      <div><div class="text-[11px] uppercase tracking-wider text-zinc-400 mb-1">Record Identifier &amp; Segment</div><div class="flex items-center gap-2"><span class="text-base font-bold text-zinc-950" id="drawerCustId">-</span><span class="px-2 py-0.5 rounded text-xs bg-zinc-100 text-zinc-800 border border-zinc-200" id="drawerTier">-</span></div></div>
-      <div><div class="text-[11px] uppercase tracking-wider text-zinc-400 mb-1">Computed SHA-256 Payload Hash</div><div class="p-2.5 rounded-lg bg-zinc-50 border border-zinc-200 text-zinc-800 break-all select-all flex items-center justify-between gap-2" id="drawerSha256Box"><span id="drawerSha256">-</span><button type="button" onclick="navigator.clipboard.writeText(document.getElementById('drawerSha256').innerText)" class="text-[10px] text-zinc-500 hover:text-zinc-900 shrink-0 uppercase font-semibold">Copy</button></div></div>
-      <div><div class="text-[11px] uppercase tracking-wider text-zinc-400 mb-1">Declarative Manifest Field Mapping</div><div class="rounded-lg border border-zinc-200 overflow-hidden"><table class="w-full text-left"><tbody id="drawerPropMapping" class="divide-y divide-zinc-200 text-[11px]"></tbody></table></div></div>
-      <div><div class="text-[11px] uppercase tracking-wider text-zinc-400 mb-1">Canonical RFC-8259 JSON Payload</div><pre class="p-3.5 rounded-lg bg-zinc-50 border border-zinc-200 text-zinc-800 overflow-x-auto text-[11px] leading-relaxed" id="drawerJson">-</pre></div>
+      <div>
+        <div class="text-[11px] uppercase tracking-wider text-zinc-400 mb-1">Record Identifier &amp; Segment</div>
+        <div class="flex items-center gap-2">
+          <span class="text-base font-bold text-zinc-950" id="drawerCustId">-</span>
+          <span class="px-2 py-0.5 rounded text-xs bg-zinc-100 text-zinc-800 border border-zinc-200" id="drawerTier">-</span>
+        </div>
+      </div>
+      <div>
+        <div class="text-[11px] uppercase tracking-wider text-zinc-400 mb-1">Computed SHA-256 Payload Hash</div>
+        <div class="p-2.5 rounded-lg bg-zinc-50 border border-zinc-200 text-zinc-800 break-all select-all flex items-center justify-between gap-2" id="drawerSha256Box">
+          <span id="drawerSha256">-</span>
+          <button type="button" onclick="navigator.clipboard.writeText(document.getElementById('drawerSha256').innerText)" class="text-[10px] text-zinc-500 hover:text-zinc-900 shrink-0 uppercase font-semibold">Copy</button>
+        </div>
+      </div>
+      <div>
+        <div class="text-[11px] uppercase tracking-wider text-zinc-400 mb-1">Declarative Manifest Field Mapping</div>
+        <div class="rounded-lg border border-zinc-200 overflow-hidden">
+          <table class="w-full text-left">
+            <tbody id="drawerPropMapping" class="divide-y divide-zinc-200 text-[11px]"></tbody>
+          </table>
+        </div>
+      </div>
+      <div>
+        <div class="text-[11px] uppercase tracking-wider text-zinc-400 mb-1">Canonical RFC-8259 JSON Payload</div>
+        <pre class="p-3.5 rounded-lg bg-zinc-50 border border-zinc-200 text-zinc-800 overflow-x-auto text-[11px] leading-relaxed" id="drawerJson">-</pre>
+      </div>
     </div>
   </aside>
 
+  <!-- Initial State Data JSON -->
+  <script id="initialStateData" type="application/json">${safeStateJson}</script>
+
+  <!-- Bulletproof Interactive Console Client Script -->
   <script>
-    function escapeHtml(text) {
-      return String(text ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-    }
+    var initialEl = document.getElementById("initialStateData");
+    var currentLiveState = initialEl ? JSON.parse(initialEl.textContent || "{}") : {};
+    var lastStateVersion = typeof currentLiveState.stateVersion === "number" ? currentLiveState.stateVersion : -1;
 
-    let currentLiveState = JSON.parse("${initialStateJson}");
-    let activeTab = "all";
-    let activeSegmentFilter = "";
-    let activeChartMetric = "delivered";
-    let filterQuery = "${escapeHtml(initialFilter)}".toLowerCase();
-    let pollingActive = true;
-    let pageOffset = 0;
-    let pageLimit = 25;
-    let searchDebounceTimer = null;
+    var activeCard = "all";
+    var activeTier = "";
+    var currentSearch = "";
+    var currentSort = "id_asc";
+    var currentPage = 1;
+    var currentLimit = 25;
+    var currentTotalMatched = 0;
+    var currentTotalPages = 1;
+    var searchDebounceTimer = null;
 
-    const infoDict = {
-      overview: { title: "Executive Overview Mission Control", business: "High-level command center combining Power BI simplicity with instant visibility into customer synchronization, risk alerts, and data hygiene.", tech: "Consolidates Reverse ETL execution metrics from Snowflake/DuckDB into HubSpot CRM v3 with cryptographic audit trails and sub-second SLA validation." },
-      synced: { title: "Synced CRM Records", business: "Total verified customer profiles successfully pushed to your active destination CRM, enriched with profitability calculations and tier rankings ready for sales outreach.", tech: "Validated against contract schemas. Dispatched via idempotent HTTP batch upserts with SHA-256 payload hashing to eliminate redundant API roundtrips." },
-      vip: { title: "VIP Accounts at Risk", business: "High-value enterprise accounts whose operating margin dropped below -20.0%, alerting executive leadership to initiate retention strategies before renewal churn.", tech: "Identified via SQL window analytics and rule engine thresholds (customer_tier = 'ENTERPRISE_VIP' AND margin_pct <= -20.0). Auto-generates AI executive briefs stored directly in custom CRM properties." },
-      dlq: { title: "Records Held for Review (Data Quarantine)", business: "Corrupted records paused at the boundary to prevent CRM pollution, then repaired automatically by our AI Doctor without requiring human intervention.", tech: "Implements Dead Letter Queue isolation: 150 malformed emails remediated via RFC-5322 regex sanitization, and 50 IEEE-754 NaN margins safely coalesced to 0.0 with audit trail." },
-      savings: { title: "Annual Cloud Savings", business: "Direct cost reduction achieved by executing data pipelines in-engine rather than paying third-party SaaS vendors per-row ingestion fees.", tech: "Replaces commercial Reverse ETL vendor ($4,200/yr) with serverless Snowflake XS warehouse execution under FinOps auto-suspend (60s) policies costing $2.50/mo (99.3% reduction)." },
-      schema: { title: "Declarative Schema Mapping (Any Warehouse Table)", business: "DataPulse is schema-agnostic. The declarative YAML manifest maps any analytical warehouse mart (fct_customer_profitability, orders, subscriptions) to any CRM or SaaS API target.", tech: "Configured via syncs/hubspot_profitability.yml: maps 11 warehouse columns (customer_id -> datapulse_customer_id, annual_revenue -> annualrevenue, net_profitability_usd -> hs_net_profitability_usd) with runtime Pydantic v2 validation." }
+    var tooltipDictionary = {
+      overview: {
+        title: "Data Pulse Mission Control",
+        business: "High-throughput data engineering console providing end-to-end auditability across ingestion, data hygiene, and destination CRM sync.",
+        tech: "Extracts analytical mart records from Snowflake or DuckDB, applies declarative YAML schema mapping, executes token-bucket batch upserts, and logs FinOps cost telemetry."
+      },
+      all: {
+        title: "All Synced Customers",
+        business: "Total customer profiles delivered to HubSpot CRM v3, enriched with computed net profitability and segment rankings.",
+        tech: "Dispatched via /crm/v3/objects/contacts/batch/upsert in 100-row micro-batches with SHA-256 payload verification and token-bucket rate limiting."
+      },
+      errors: {
+        title: "Detected Errors (DLQ)",
+        business: "Corrupted records intercepted at the validation perimeter before polluting downstream CRM accounts.",
+        tech: "Dead-Letter Queue isolation capturing INVALID_EMAIL_FORMAT (150 rows) and IEEE_754_NAN_INFINITY (50 rows) with full stack trace."
+      },
+      vip: {
+        title: "VIP Retention Alerts",
+        business: "Enterprise VIP accounts whose operating profit margin dropped below -20%, flagging immediate account executive intervention.",
+        tech: "Filtered via SQL window threshold: customer_tier = 'ENTERPRISE_VIP' AND profit_margin_pct <= -20.0, enriched with automated AI briefs."
+      },
+      repaired: {
+        title: "Auto-Repaired Records",
+        business: "Quarantined records automatically diagnosed, sanitized, and replayed into CRM with zero human data-entry labor.",
+        tech: "AI DLQ Doctor applies RFC-5322 regex sanitization on malformed emails and safe coalesce(0.0) on NaN floats, then replays to destination."
+      },
+      guardrails: {
+        title: "Pipeline & Cloud Guardrails",
+        business: "FinOps cost protection and idempotency layers preventing duplicate cloud queries and redundant API charges.",
+        tech: "SHA-256 hash comparison skips unchanged records (0 HTTP calls). Snowflake AUTO_SUSPEND=60s limits compute cost to $2.50/mo."
+      },
+      distribution: {
+        title: "Ingestion & Quality Distribution",
+        business: "Real-time proportion of clean records, held quarantine anomalies, automatic repairs, and cached skips.",
+        tech: "Live row conservation balance: Extracted(N) = Delivered(S) + Quarantined(E) + Skipped(O). Demonstrates deterministic row accounting."
+      },
+      tiers: {
+        title: "Customer Segment Tiers",
+        business: "Revenue and profitability breakdown by commercial account tier. Clicking any tier cross-filters the records table.",
+        tech: "Calculated dynamically in DuckDB/Snowflake: ENTERPRISE_VIP, ENTERPRISE, MID_MARKET, and SME aggregated metrics."
+      },
+      schema: {
+        title: "Declarative Schema Mapping",
+        business: "DataPulse is schema-agnostic. The declarative YAML manifest maps warehouse mart fields directly to CRM custom properties.",
+        tech: "Configured via syncs/hubspot_profitability.yml: maps customer_id -> hs_external_customer_id, net_profitability_usd, and AI briefs."
+      }
     };
 
-    const popoverBackdrop = document.getElementById("infoPopoverBackdrop");
-    const popoverCard = document.getElementById("infoPopoverCard");
-    function openInfoPopover(key) {
-      const data = infoDict[key] || infoDict.overview;
-      document.getElementById("infoModalTitle").innerText = data.title;
-      document.getElementById("infoModalBusiness").innerText = data.business;
-      document.getElementById("infoModalTech").innerText = data.tech;
-      popoverBackdrop.classList.remove("hidden");
-      setTimeout(() => { popoverBackdrop.classList.remove("opacity-0"); popoverCard.classList.remove("scale-95"); }, 10);
+    function escapeClientHtml(str) {
+      return String(str == null ? "" : str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
     }
-    function closeInfoPopover() {
-      popoverBackdrop.classList.add("opacity-0"); popoverCard.classList.add("scale-95");
-      setTimeout(() => popoverBackdrop.classList.add("hidden"), 150);
-    }
-    document.getElementById("closeInfoBtn").addEventListener("click", closeInfoPopover);
-    document.getElementById("closeInfoBtn2").addEventListener("click", closeInfoPopover);
-    popoverBackdrop.addEventListener("click", (e) => { if (e.target === popoverBackdrop) closeInfoPopover(); });
 
-    const drawer = document.getElementById("inspectorDrawer");
-    const drawerBackdrop = document.getElementById("drawerBackdrop");
-    async function computeSha256(str) {
-      const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
-      return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+    function openFloatingTooltip(topicKey, btnElement, event) {
+      if (event) {
+        event.stopPropagation();
+      }
+      var tip = document.getElementById("floatingTooltip");
+      if (!tip) return;
+      var data = tooltipDictionary[topicKey] || tooltipDictionary.overview;
+      var titleEl = document.getElementById("tooltipTitle");
+      var bizEl = document.getElementById("tooltipBusiness");
+      var techEl = document.getElementById("tooltipTech");
+      if (titleEl) titleEl.innerText = data.title;
+      if (bizEl) bizEl.innerText = data.business;
+      if (techEl) techEl.innerText = data.tech;
+
+      if (btnElement) {
+        var rect = btnElement.getBoundingClientRect();
+        var tipWidth = 320;
+        var left = rect.left - 120;
+        if (left < 16) left = 16;
+        if (left + tipWidth > window.innerWidth - 16) {
+          left = window.innerWidth - tipWidth - 16;
+        }
+        var top = rect.bottom + 8;
+        tip.style.left = left + "px";
+        tip.style.top = top + "px";
+      }
+      tip.classList.remove("hidden");
     }
-    async function openInspector(contact) {
-      document.getElementById("drawerCustId").innerText = contact.customer_id || "-";
-      document.getElementById("drawerTier").innerText = contact.customer_tier || "UNKNOWN";
-      document.getElementById("drawerJson").innerText = JSON.stringify(contact, null, 2);
-      document.getElementById("drawerSha256").innerText = await computeSha256(JSON.stringify(contact));
-      const mapping = [
-        ["hs_external_customer_id", contact.customer_id], ["company", contact.company || "Enterprise Account"],
-        ["country", contact.country || "US"], ["email", contact.email],
-        ["hs_net_profitability_usd", "$" + (contact.net_profitability_usd || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })],
-        ["hs_profit_margin_pct", (contact.profit_margin_pct || 0).toFixed(1) + "%"],
-        ["datapulse_customer_tier", contact.customer_tier], ["datapulse_remediated_from_dlq", contact.remediated_from_dlq ? "true" : "false"],
-        ["datapulse_ai_executive_brief", contact.ai_executive_brief || "[Standard Margin Rhythm]"]
+
+    function closeFloatingTooltip() {
+      var tip = document.getElementById("floatingTooltip");
+      if (tip) tip.classList.add("hidden");
+    }
+
+    document.addEventListener("click", function(e) {
+      var tip = document.getElementById("floatingTooltip");
+      if (tip && !tip.classList.contains("hidden")) {
+        if (!tip.contains(e.target) && !e.target.closest(".info-tooltip-btn")) {
+          tip.classList.add("hidden");
+        }
+      }
+    });
+
+    document.addEventListener("keydown", function(e) {
+      if (e.key === "Escape") {
+        closeFloatingTooltip();
+        closeInspector();
+      }
+    });
+
+    function selectTabCard(cardKey) {
+      activeCard = cardKey;
+      currentPage = 1;
+      updateCardStyles();
+      var custTable = document.getElementById("customerTableContainer");
+      var guardView = document.getElementById("guardrailsViewContainer");
+      var toolbar = document.getElementById("tableToolbar");
+      var paginationBar = document.getElementById("tablePaginationBar");
+
+      if (cardKey === "guardrails") {
+        if (custTable) custTable.classList.add("hidden");
+        if (toolbar) toolbar.classList.add("hidden");
+        if (paginationBar) paginationBar.classList.add("hidden");
+        if (guardView) guardView.classList.remove("hidden");
+      } else {
+        if (guardView) guardView.classList.add("hidden");
+        if (custTable) custTable.classList.remove("hidden");
+        if (toolbar) toolbar.classList.remove("hidden");
+        if (paginationBar) paginationBar.classList.remove("hidden");
+        updateTableHeader();
+        loadTableData();
+      }
+    }
+
+    function updateCardStyles() {
+      var cards = [
+        { id: "cardAll", key: "all" },
+        { id: "cardErrors", key: "errors" },
+        { id: "cardVip", key: "vip" },
+        { id: "cardRepaired", key: "repaired" },
+        { id: "cardGuardrails", key: "guardrails" }
       ];
-      document.getElementById("drawerPropMapping").innerHTML = mapping.map(([k, v]) => '<tr class="border-b border-zinc-200"><td class="p-2.5 text-zinc-500 font-mono">' + k + '</td><td class="p-2.5 font-mono font-medium text-zinc-900">' + v + '</td></tr>').join("");
-      drawerBackdrop.classList.remove("hidden");
-      setTimeout(() => drawerBackdrop.classList.remove("opacity-0"), 10);
-      drawer.classList.remove("translate-x-full");
-    }
-    function closeInspector() {
-      drawer.classList.add("translate-x-full"); drawerBackdrop.classList.add("opacity-0");
-      setTimeout(() => drawerBackdrop.classList.add("hidden"), 200);
-    }
-    document.getElementById("closeDrawerBtn").addEventListener("click", closeInspector);
-    drawerBackdrop.addEventListener("click", closeInspector);
-
-    function toggleSegmentFilter(segment) {
-      if (activeSegmentFilter === segment) activeSegmentFilter = "";
-      else activeSegmentFilter = segment;
-      updateSegmentBarHighlight();
-      pageOffset = 0;
-      loadContacts(false);
-    }
-    function clearSegmentFilter() {
-      activeSegmentFilter = "";
-      updateSegmentBarHighlight();
-      pageOffset = 0;
-      loadContacts(false);
-    }
-    function updateSegmentBarHighlight() {
-      const clearBtn = document.getElementById("btnClearCrossFilter");
-      const activeLabel = document.getElementById("activeFilterLabel");
-      ["ENTERPRISE_VIP", "ENTERPRISE", "MID_MARKET", "SME"].forEach((seg) => {
-        const row = document.getElementById("barRow_" + seg);
-        if (!row) return;
-        if (activeSegmentFilter === seg) row.className = "segment-bar-row p-2.5 rounded-lg border-2 border-emerald-600 bg-emerald-50/50 transition cursor-pointer shadow-sm";
-        else row.className = "segment-bar-row p-2.5 rounded-lg border border-zinc-200 hover:border-zinc-400 transition cursor-pointer";
+      cards.forEach(function(c) {
+        var el = document.getElementById(c.id);
+        if (!el) return;
+        var ind = el.querySelector(".card-indicator");
+        if (c.key === activeCard) {
+          el.className = "kpi-card kpi-card-active rounded-xl border border-zinc-950 bg-zinc-50/80 p-4 shadow-md cursor-pointer select-none";
+          if (ind) { ind.innerText = "Active"; ind.className = "card-indicator font-semibold text-zinc-900"; }
+        } else {
+          el.className = "kpi-card rounded-xl border border-zinc-200 bg-white p-4 shadow-sm cursor-pointer hover:border-zinc-300 select-none";
+          if (ind) { ind.innerText = c.key === "guardrails" ? "Click to inspect" : "Click to filter"; ind.className = "card-indicator font-semibold text-zinc-400"; }
+        }
       });
-      if (clearBtn) clearBtn.className = activeSegmentFilter ? "self-start sm:self-auto px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-600 text-white transition" : "hidden";
-      if (activeLabel) activeLabel.innerText = activeSegmentFilter ? activeSegmentFilter : "None (All Records)";
     }
 
-    function setChartMetric(metric) {
-      activeChartMetric = metric;
-      const bDel = document.getElementById("chartBtnDelivered");
-      const bDlq = document.getElementById("chartBtnDlq");
-      const bComb = document.getElementById("chartBtnCombined");
-      [bDel, bDlq, bComb].forEach((b) => { if (b) b.className = "px-2.5 py-1 rounded font-medium text-zinc-600 hover:text-zinc-950 transition"; });
-      if (metric === "delivered" && bDel) bDel.className = "px-2.5 py-1 rounded font-medium bg-white text-zinc-950 shadow-sm transition";
-      if (metric === "quarantined" && bDlq) bDlq.className = "px-2.5 py-1 rounded font-medium bg-white text-zinc-950 shadow-sm transition";
-      if (metric === "combined" && bComb) bComb.className = "px-2.5 py-1 rounded font-medium bg-white text-zinc-950 shadow-sm transition";
-      renderAreaChart(currentLiveState);
-    }
-
-    function renderAreaChart(s) {
-      const isZero = s.totalSyncedContacts === 0 && s.extractedN === 0;
-      const overlay = document.getElementById("chartZeroOverlay");
-      if (overlay) overlay.className = isZero ? "flex absolute inset-0 items-center justify-center bg-white/60 backdrop-blur-[1px]" : "hidden";
-
-      const pathDelivered = document.getElementById("chartPathDelivered");
-      const areaDelivered = document.getElementById("chartAreaDelivered");
-      const pathDlq = document.getElementById("chartPathDlq");
-      const areaDlq = document.getElementById("chartAreaDlq");
-
-      if (isZero) {
-        if (pathDelivered) pathDelivered.setAttribute("d", "M 30 180 L 880 180");
-        if (areaDelivered) areaDelivered.setAttribute("d", "M 30 180 L 880 180");
-        if (pathDlq) pathDlq.setAttribute("d", "M 30 180 L 880 180");
-        if (areaDlq) areaDlq.setAttribute("d", "M 30 180 L 880 180");
-        return;
-      }
-
-      const totalTarget = Math.max(1, s.extractedN || 10000);
-      const deliveredProgress = Math.min(1, s.syncedS / totalTarget);
-      const dlqRatio = Math.min(0.2, (s.dlqPendingE || (s.syncedS < 10000 ? 200 : 0)) / 1000);
-
-      const dTargetY = Math.round(180 - (deliveredProgress * 140));
-      const midY = Math.round(180 - (deliveredProgress * 95));
-      const p1 = "M 30 180 C 220 180, 360 " + midY + ", 540 " + (dTargetY + 12) + " C 680 " + (dTargetY + 6) + ", 780 " + dTargetY + ", 880 " + dTargetY;
-      const a1 = p1 + " L 880 180 L 30 180 Z";
-
-      const dlqPeakY = Math.round(180 - (dlqRatio * 320));
-      const dlqEndY = s.dlqPendingE > 0 ? dlqPeakY : 180;
-      const p2 = "M 30 180 C 180 180, 320 " + dlqPeakY + ", 500 " + dlqPeakY + " C 660 " + dlqPeakY + ", 760 " + (dlqEndY + 5) + ", 880 " + dlqEndY;
-      const a2 = p2 + " L 880 180 L 30 180 Z";
-
-      if (activeChartMetric === "delivered") {
-        if (pathDelivered) { pathDelivered.setAttribute("d", p1); pathDelivered.style.display = ""; }
-        if (areaDelivered) { areaDelivered.setAttribute("d", a1); areaDelivered.style.display = ""; }
-        if (pathDlq) pathDlq.style.display = "none";
-        if (areaDlq) areaDlq.style.display = "none";
-      } else if (activeChartMetric === "quarantined") {
-        if (pathDelivered) pathDelivered.style.display = "none";
-        if (areaDelivered) areaDelivered.style.display = "none";
-        if (pathDlq) { pathDlq.setAttribute("d", p2); pathDlq.style.display = ""; }
-        if (areaDlq) { areaDlq.setAttribute("d", a2); areaDlq.style.display = ""; }
+    function toggleTierFilter(tier) {
+      if (activeTier === tier) {
+        activeTier = "";
       } else {
-        if (pathDelivered) { pathDelivered.setAttribute("d", p1); pathDelivered.style.display = ""; }
-        if (areaDelivered) { areaDelivered.setAttribute("d", a1); areaDelivered.style.display = ""; }
-        if (pathDlq) { pathDlq.setAttribute("d", p2); pathDlq.style.display = ""; }
-        if (areaDlq) { areaDlq.setAttribute("d", a2); areaDlq.style.display = ""; }
+        activeTier = tier;
       }
+      if (activeCard === "guardrails") {
+        activeCard = "all";
+        updateCardStyles();
+        var custTable = document.getElementById("customerTableContainer");
+        var guardView = document.getElementById("guardrailsViewContainer");
+        var toolbar = document.getElementById("tableToolbar");
+        var paginationBar = document.getElementById("tablePaginationBar");
+        if (guardView) guardView.classList.add("hidden");
+        if (custTable) custTable.classList.remove("hidden");
+        if (toolbar) toolbar.classList.remove("hidden");
+        if (paginationBar) paginationBar.classList.remove("hidden");
+      }
+      updateTierBarHighlight();
+      currentPage = 1;
+      loadTableData();
     }
 
-    function renderPowerBiAnalytics(s) {
-      const isZero = s.totalSyncedContacts === 0 && s.extractedN === 0;
-      const seg = s.segmentBreakdown || {};
-      const vip = seg.ENTERPRISE_VIP || { annual_revenue: 0, net_profitability_usd: 0, count: 0 };
-      const ent = seg.ENTERPRISE || { annual_revenue: 0, net_profitability_usd: 0, count: 0 };
-      const mm = seg.MID_MARKET || { annual_revenue: 0, net_profitability_usd: 0, count: 0 };
-      const sme = seg.SME || { annual_revenue: 0, net_profitability_usd: 0, count: 0 };
-      const totalRev = vip.annual_revenue + ent.annual_revenue + mm.annual_revenue + sme.annual_revenue;
-      const maxRev = Math.max(totalRev, 1);
-
-      document.getElementById("barFill_ENTERPRISE_VIP").style.width = isZero ? "0%" : Math.min(100, Math.round((vip.annual_revenue / maxRev) * 100)) + "%";
-      document.getElementById("barFill_ENTERPRISE").style.width = isZero ? "0%" : Math.min(100, Math.round((ent.annual_revenue / maxRev) * 100)) + "%";
-      document.getElementById("barFill_MID_MARKET").style.width = isZero ? "0%" : Math.min(100, Math.round((mm.annual_revenue / maxRev) * 100)) + "%";
-      document.getElementById("barFill_SME").style.width = isZero ? "0%" : Math.min(100, Math.round((sme.annual_revenue / maxRev) * 100)) + "%";
-
-      document.getElementById("segNet_ENTERPRISE_VIP").innerText = isZero ? "Net: $0.00" : "Net: -$" + Math.abs(vip.net_profitability_usd).toLocaleString("en-US", { minimumFractionDigits: 2 }) + " (-20.0% Risk)";
-      document.getElementById("segNet_ENTERPRISE").innerText = "Net: +$" + ent.net_profitability_usd.toLocaleString("en-US", { minimumFractionDigits: 2 });
-      document.getElementById("segNet_MID_MARKET").innerText = "Net: +$" + mm.net_profitability_usd.toLocaleString("en-US", { minimumFractionDigits: 2 });
-      document.getElementById("segNet_SME").innerText = "Net: +$" + sme.net_profitability_usd.toLocaleString("en-US", { minimumFractionDigits: 2 });
-
-      document.getElementById("segCount_ENTERPRISE_VIP").innerText = vip.count.toLocaleString("en-US") + " accounts";
-      document.getElementById("segCount_ENTERPRISE").innerText = ent.count.toLocaleString("en-US") + " accounts";
-      document.getElementById("segCount_MID_MARKET").innerText = mm.count.toLocaleString("en-US") + " accounts";
-      document.getElementById("segCount_SME").innerText = sme.count.toLocaleString("en-US") + " accounts";
-
-      document.getElementById("segRev_ENTERPRISE_VIP").innerText = "Rev: $" + vip.annual_revenue.toLocaleString("en-US", { minimumFractionDigits: 2 });
-      document.getElementById("segRev_ENTERPRISE").innerText = "Rev: $" + ent.annual_revenue.toLocaleString("en-US", { minimumFractionDigits: 2 });
-      document.getElementById("segRev_MID_MARKET").innerText = "Rev: $" + mm.annual_revenue.toLocaleString("en-US", { minimumFractionDigits: 2 });
-      document.getElementById("segRev_SME").innerText = "Rev: $" + sme.annual_revenue.toLocaleString("en-US", { minimumFractionDigits: 2 });
-      document.getElementById("totalSegmentRevSpan").innerText = "Total Rev: $" + totalRev.toLocaleString("en-US", { minimumFractionDigits: 2 });
-
-      const cleanDelivered = Math.max(0, s.syncedS - s.dlqResolved);
-      const totalBase = Math.max(1, s.extractedN || 10000);
-      document.getElementById("progressClean").style.width = isZero ? "0%" : Math.min(100, (cleanDelivered / totalBase) * 100) + "%";
-      document.getElementById("progressRepaired").style.width = isZero ? "0%" : Math.min(100, (s.dlqResolved / totalBase) * 100) + "%";
-      document.getElementById("progressHeld").style.width = isZero ? "0%" : Math.min(100, (s.dlqPendingE / totalBase) * 100) + "%";
-
-      document.getElementById("cleanDeliveredCount").innerText = isZero ? "0" : cleanDelivered.toLocaleString("en-US");
-      document.getElementById("repairedCountProg").innerText = s.dlqResolved.toLocaleString("en-US");
-      document.getElementById("heldCountProg").innerText = s.dlqPendingE.toLocaleString("en-US");
-      document.getElementById("conservationRatioText").innerText = isZero ? "0 / 0 (0%)" : s.syncedS.toLocaleString("en-US") + " / " + totalBase.toLocaleString("en-US") + " (" + Math.round((s.syncedS / totalBase) * 100) + "%)";
-
-      const badge = document.getElementById("triageBadge");
-      const emailStatus = document.getElementById("triageEmailStatus");
-      const nanStatus = document.getElementById("triageNanStatus");
-      const emailCountEl = document.getElementById("triageEmailCountText");
-      const nanCountEl = document.getElementById("triageNanCountText");
-      const btnRepair = document.getElementById("btnRepairNow");
-      const actionStatus = document.getElementById("triageActionStatus");
-
-      if (isZero) {
-        if (badge) { badge.innerText = "Stage 0 Baseline"; badge.className = "self-start sm:self-auto px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-zinc-100 text-zinc-600 border border-zinc-200"; }
-        if (emailStatus) emailStatus.innerText = "Standby";
-        if (nanStatus) nanStatus.innerText = "Standby";
-        if (emailCountEl) emailCountEl.innerText = "0";
-        if (nanCountEl) nanCountEl.innerText = "0";
-        if (btnRepair) btnRepair.className = "hidden";
-        if (actionStatus) actionStatus.innerText = "Standby";
-      } else if (s.dlqPendingE > 0) {
-        if (badge) { badge.innerText = s.dlqPendingE + " Pending Triage"; badge.className = "self-start sm:self-auto px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-rose-50 text-rose-700 border border-rose-200"; }
-        if (emailStatus) { emailStatus.innerText = (s.emailErrorsPending || 150) + " Quarantined"; emailStatus.className = "text-rose-700 font-semibold"; }
-        if (nanStatus) { nanStatus.innerText = (s.nanErrorsPending || 50) + " Quarantined"; nanStatus.className = "text-amber-700 font-semibold"; }
-        if (emailCountEl) emailCountEl.innerText = String(s.emailErrorsPending || 150);
-        if (nanCountEl) nanCountEl.innerText = String(s.nanErrorsPending || 50);
-        if (btnRepair) { btnRepair.className = "px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium transition flex items-center justify-center gap-1.5 shadow-sm"; }
-        if (actionStatus) { actionStatus.innerText = "Surgical Replay Ready"; actionStatus.className = "text-xs font-mono text-amber-700"; }
-      } else {
-        if (badge) { badge.innerText = "100% Healed & Delivered"; badge.className = "self-start sm:self-auto px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"; }
-        if (emailStatus) { emailStatus.innerText = "150 Auto-Repaired"; emailStatus.className = "text-emerald-700 font-semibold"; }
-        if (nanStatus) { nanStatus.innerText = "50 Coalesced 0.0"; nanStatus.className = "text-emerald-700 font-semibold"; }
-        if (emailCountEl) emailCountEl.innerText = "150";
-        if (nanCountEl) nanCountEl.innerText = "50";
-        if (btnRepair) btnRepair.className = "hidden";
-        if (actionStatus) { actionStatus.innerText = "DLQ Empty • Certified"; actionStatus.className = "text-xs font-mono text-emerald-700"; }
-      }
+    function clearTierFilter() {
+      activeTier = "";
+      updateTierBarHighlight();
+      currentPage = 1;
+      loadTableData();
     }
 
-    function updateTabButtons() {
-      document.querySelectorAll(".tab-btn").forEach((b) => {
-        const t = b.getAttribute("data-tab");
-        b.className = t === activeTab ? "tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition bg-zinc-950 text-white shadow-sm inline-flex items-center shrink-0" : "tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-600 hover:text-zinc-950 transition inline-flex items-center shrink-0";
+    function updateTierBarHighlight() {
+      var tiers = ["ENTERPRISE_VIP", "ENTERPRISE", "MID_MARKET", "SME"];
+      tiers.forEach(function(t) {
+        var el = document.getElementById("barRow_" + t);
+        if (!el) return;
+        if (t === activeTier) {
+          el.className = "tier-bar-row tier-bar-active p-2 rounded-lg border border-emerald-600 bg-emerald-50/60 shadow-sm cursor-pointer transition";
+        } else {
+          el.className = "tier-bar-row p-2 rounded-lg border border-zinc-200 hover:border-zinc-400 transition cursor-pointer";
+        }
       });
-      const customersWrapper = document.getElementById("customersTableWrapper");
-      const healthWrapper = document.getElementById("healthTableWrapper");
-      const filterContainer = document.getElementById("filterContainer");
-      const paginationBar = document.getElementById("tablePaginationBar");
-      if (activeTab === "health") {
-        customersWrapper.classList.add("hidden"); healthWrapper.classList.remove("hidden"); filterContainer.classList.add("hidden"); if (paginationBar) paginationBar.classList.add("hidden");
-      } else {
-        customersWrapper.classList.remove("hidden"); healthWrapper.classList.add("hidden"); filterContainer.classList.remove("hidden"); if (paginationBar) paginationBar.classList.remove("hidden");
-        pageOffset = 0;
-        loadContacts(false);
+      var clearBtn = document.getElementById("btnClearTierFilter");
+      var label = document.getElementById("activeTierLabel");
+      if (clearBtn) {
+        if (activeTier) clearBtn.classList.remove("hidden");
+        else clearBtn.classList.add("hidden");
+      }
+      if (label) {
+        label.innerText = activeTier ? activeTier : "None (All Tiers)";
       }
     }
 
-    document.querySelectorAll(".tab-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        activeTab = btn.getAttribute("data-tab");
-        updateTabButtons();
-      });
-    });
-
-    const filterInputEl = document.getElementById("filterInput");
-    filterInputEl.addEventListener("input", (e) => {
-      clearTimeout(searchDebounceTimer);
-      searchDebounceTimer = setTimeout(() => {
-        filterQuery = e.target.value.toLowerCase().trim();
-        pageOffset = 0;
-        loadContacts(false);
-      }, 150);
-    });
-
-    function formatRowClient(c) {
-      const isVip = Boolean(c.ai_executive_brief) || c.customer_tier.includes("VIP");
-      const isHealed = c.remediated_from_dlq || (c.customer_id >= "CUST-09801");
-      const statusPill = isVip ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200"><span class="w-1.5 h-1.5 rounded-full bg-rose-600 mr-1.5"></span>VIP At Risk</span>' : isHealed ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>Auto-Repaired</span>' : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>Delivered</span>';
-      const briefCell = c.ai_executive_brief ? '<div class="flex items-center gap-1.5"><span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 shrink-0">[VIP-BRIEF]</span><span class="text-xs text-zinc-700 truncate max-w-xs" title="' + escapeHtml(c.ai_executive_brief) + '">' + escapeHtml(c.ai_executive_brief) + '</span></div>' : isHealed ? '<span class="text-xs text-zinc-500">Remediated via AI DLQ Doctor (RFC-5322 regex / coalesce)</span>' : '<span class="text-xs text-zinc-400">Standard Margin Profile - Normal Rhythm</span>';
-      const marginBadge = c.profit_margin_pct < 0 ? '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">' + c.profit_margin_pct.toFixed(1) + '%</span>' : '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">+' + c.profit_margin_pct.toFixed(1) + '%</span>';
-      const tierBadge = isVip ? '<span class="px-2 py-0.5 rounded text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200">' + escapeHtml(c.customer_tier) + '</span>' : '<span class="px-2 py-0.5 rounded text-xs font-medium bg-zinc-100 text-zinc-700 border border-zinc-200">' + escapeHtml(c.customer_tier) + '</span>';
-      const safeJson = escapeHtml(JSON.stringify(c));
-      return '<tr class="customer-row border-b border-zinc-200 hover:bg-zinc-50/80 transition-colors cursor-pointer" data-contact="' + safeJson + '" onclick="openInspectorFromRow(this)"><td class="p-3 text-center"><input type="checkbox" class="rounded border-zinc-300 text-zinc-900 focus:ring-0" onclick="event.stopPropagation()" /></td><td class="p-3"><div class="flex items-center gap-2"><span class="font-medium text-xs text-zinc-950 font-mono">' + escapeHtml(c.customer_id) + '</span><span class="px-1.5 py-0.2 rounded text-[10px] font-mono bg-zinc-100 text-zinc-600 border border-zinc-200">' + escapeHtml(c.country || "US") + '</span></div><div class="text-[11px] text-zinc-500">' + escapeHtml(c.company || "Enterprise Account") + ' • <span class="font-mono">' + escapeHtml(c.email) + '</span></div></td><td class="p-3">' + tierBadge + '</td><td class="p-3">' + statusPill + '</td><td class="p-3 font-mono text-xs font-semibold text-zinc-950">$' + (c.net_profitability_usd || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</td><td class="p-3">' + marginBadge + '</td><td class="p-3">' + briefCell + '</td><td class="p-3 text-right"><button type="button" class="btn-inspect px-2.5 py-1 rounded text-xs font-medium border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100 transition" onclick="event.stopPropagation(); openInspectorFromRow(this.closest(\'tr\'))">Inspect</button></td></tr>';
+    function updateTableHeader() {
+      var theadRow = document.getElementById("tableHeaderRow");
+      if (!theadRow) return;
+      if (activeCard === "errors") {
+        theadRow.innerHTML = '<th class="p-3 text-center w-10"><input type="checkbox" class="rounded border-zinc-300 text-zinc-900 focus:ring-0" /></th>' +
+          '<th class="p-3 font-medium">Record Identifier &amp; Email</th>' +
+          '<th class="p-3 font-medium">Quarantined Error Code</th>' +
+          '<th class="p-3 font-medium">Diagnostic Reason / Failure Message</th>' +
+          '<th class="p-3 font-medium">Quarantine Stage</th>' +
+          '<th class="p-3 font-medium">DLQ Status</th>' +
+          '<th class="p-3 font-medium text-right">Details</th>';
+      } else {
+        theadRow.innerHTML = '<th class="p-3 text-center w-10"><input type="checkbox" class="rounded border-zinc-300 text-zinc-900 focus:ring-0" /></th>' +
+          '<th class="p-3 font-medium">Record Identifier &amp; Source</th>' +
+          '<th class="p-3 font-medium">Segment Tier</th>' +
+          '<th class="p-3 font-medium">Delivery Status</th>' +
+          '<th class="p-3 font-medium">Net Profit</th>' +
+          '<th class="p-3 font-medium">Margin</th>' +
+          '<th class="p-3 font-medium">Enrichment / Action</th>' +
+          '<th class="p-3 font-medium text-right">Details</th>';
+      }
     }
 
-    async function loadContacts(append = false) {
-      const tbody = document.getElementById("contactsBody");
+    function renderTableRow(c) {
+      var isErrorTab = activeCard === "errors";
+      var safeJson = escapeClientHtml(JSON.stringify(c));
+
+      if (isErrorTab) {
+        var errCode = c.error_code || "INVALID_RECORD";
+        var errMsg = c.error_message || "Contract validation failure";
+        var isResolved = c.status === "RESOLVED" || Boolean(c.remediated_from_dlq);
+        var statusBadge = isResolved
+          ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>RESOLVED</span>'
+          : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200"><span class="w-1.5 h-1.5 rounded-full bg-rose-600 mr-1.5 animate-pulse"></span>PENDING</span>';
+
+        return '<tr class="customer-row border-b border-zinc-200 hover:bg-zinc-50/80 transition-colors cursor-pointer" data-contact="' + safeJson + '" onclick="openInspectorFromRow(this)">' +
+          '<td class="p-3 text-center"><input type="checkbox" class="rounded border-zinc-300 text-zinc-900 focus:ring-0" onclick="event.stopPropagation()" /></td>' +
+          '<td class="p-3"><div class="font-medium text-xs text-zinc-950 font-mono">' + escapeClientHtml(c.customer_id) + '</div><div class="text-[11px] text-zinc-500 font-mono">' + escapeClientHtml(c.email) + '</div></td>' +
+          '<td class="p-3"><span class="px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-rose-50 text-rose-700 border border-rose-200">' + escapeClientHtml(errCode) + '</span></td>' +
+          '<td class="p-3"><div class="text-xs text-zinc-800 font-mono truncate max-w-sm" title="' + escapeClientHtml(errMsg) + '">' + escapeClientHtml(errMsg) + '</div></td>' +
+          '<td class="p-3"><span class="text-[11px] font-mono text-zinc-500">CONTRACT_VALIDATION</span></td>' +
+          '<td class="p-3">' + statusBadge + '</td>' +
+          '<td class="p-3 text-right"><button type="button" class="btn-inspect px-2.5 py-1 rounded text-xs font-medium border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100 transition" onclick="event.stopPropagation(); openInspectorFromRow(this)">Inspect</button></td>' +
+          '</tr>';
+      }
+
+      var isVip = Boolean(c.ai_executive_brief) || (c.customer_tier || "").includes("VIP");
+      var isHealed = Boolean(c.remediated_from_dlq);
+      var statusPill = isVip
+        ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200"><span class="w-1.5 h-1.5 rounded-full bg-rose-600 mr-1.5"></span>VIP At Risk</span>'
+        : isHealed
+          ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>Auto-Repaired</span>'
+          : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>Delivered</span>';
+
+      var briefCell = c.ai_executive_brief
+        ? '<div class="flex items-center gap-1.5"><span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 shrink-0">[VIP-BRIEF]</span><span class="text-xs text-zinc-700 truncate max-w-xs" title="' + escapeClientHtml(c.ai_executive_brief) + '">' + escapeClientHtml(c.ai_executive_brief) + '</span></div>'
+        : isHealed
+          ? '<span class="text-xs text-zinc-500 font-mono">Remediated via AI DLQ Replay</span>'
+          : '<span class="text-xs text-zinc-400">Standard Margin Profile</span>';
+
+      var marginPct = c.profit_margin_pct != null ? c.profit_margin_pct : 0;
+      var marginBadge = '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold ' + (marginPct < 0 ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200') + '">' + (marginPct < 0 ? '' : '+') + marginPct.toFixed(1) + '%</span>';
+      var tierBadge = '<span class="px-2 py-0.5 rounded text-xs font-medium ' + (isVip ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-zinc-100 text-zinc-700 border border-zinc-200') + '">' + escapeClientHtml(c.customer_tier || 'STANDARD') + '</span>';
+      var netProfit = (c.net_profitability_usd != null ? c.net_profitability_usd : 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+      return '<tr class="customer-row border-b border-zinc-200 hover:bg-zinc-50/80 transition-colors cursor-pointer" data-contact="' + safeJson + '" onclick="openInspectorFromRow(this)">' +
+        '<td class="p-3 text-center"><input type="checkbox" class="rounded border-zinc-300 text-zinc-900 focus:ring-0" onclick="event.stopPropagation()" /></td>' +
+        '<td class="p-3"><div class="flex items-center gap-2"><span class="font-medium text-xs text-zinc-950 font-mono">' + escapeClientHtml(c.customer_id) + '</span><span class="px-1.5 py-0.2 rounded text-[10px] font-mono bg-zinc-100 text-zinc-600 border border-zinc-200">' + escapeClientHtml(c.country || "US") + '</span></div><div class="text-[11px] text-zinc-500">' + escapeClientHtml(c.company || "Enterprise Account") + ' &bull; <span class="font-mono">' + escapeClientHtml(c.email) + '</span></div></td>' +
+        '<td class="p-3">' + tierBadge + '</td>' +
+        '<td class="p-3">' + statusPill + '</td>' +
+        '<td class="p-3 font-mono text-xs font-semibold text-zinc-950">$' + netProfit + '</td>' +
+        '<td class="p-3">' + marginBadge + '</td>' +
+        '<td class="p-3">' + briefCell + '</td>' +
+        '<td class="p-3 text-right"><button type="button" class="btn-inspect px-2.5 py-1 rounded text-xs font-medium border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100 transition" onclick="event.stopPropagation(); openInspectorFromRow(this)">Inspect</button></td>' +
+        '</tr>';
+    }
+
+    async function loadTableData() {
+      var tbody = document.getElementById("contactsBody");
       if (!tbody) return;
-      const isZero = currentLiveState.totalSyncedContacts === 0 && currentLiveState.extractedN === 0;
-      if (isZero) {
+      var isZero = currentLiveState.totalSyncedContacts === 0 && currentLiveState.extractedN === 0;
+
+      if (isZero && activeCard !== "errors") {
         tbody.innerHTML = '<tr><td colspan="8" class="p-12 text-center text-xs text-zinc-500 font-mono">Stage 0 Baseline: 0 Contacts in CRM. Ingestion pipeline is idle. Click "1. Run Initial Sync" above to stream batches...</td></tr>';
-        updatePaginationUi(0, 0, 0, false);
+        updatePaginationDisplay(0, 1, 1);
         return;
       }
+
+      var queryParams = [];
+      if (currentSearch) queryParams.push("search=" + encodeURIComponent(currentSearch));
+      if (activeCard) queryParams.push("tab=" + encodeURIComponent(activeCard));
+      if (activeTier) queryParams.push("tier=" + encodeURIComponent(activeTier));
+      queryParams.push("page=" + currentPage);
+      queryParams.push("limit=" + currentLimit);
+      queryParams.push("sort=" + encodeURIComponent(currentSort));
+
+      var url = "/api/v1/contacts?" + queryParams.join("&");
       try {
-        let q = filterQuery;
-        if (activeSegmentFilter) q = (q ? q + " " : "") + activeSegmentFilter.toLowerCase();
-        const url = "/api/v1/contacts?q=" + encodeURIComponent(q) + "&tab=" + encodeURIComponent(activeTab) + "&offset=" + pageOffset + "&limit=" + pageLimit;
-        const resp = await fetch(url);
+        var resp = await fetch(url);
         if (!resp.ok) return;
-        const data = await resp.json();
-        const rowsHtml = (data.contacts || []).map(formatRowClient).join("\n");
-        if (data.total === 0) {
-          tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-xs text-zinc-500 font-mono">No se encontraron registros en el CRM store con el filtro actual.</td></tr>';
-          updatePaginationUi(0, 0, 0, false);
+        var data = await resp.json();
+        var items = data.items || data.contacts || [];
+        var totalMatched = typeof data.totalMatched === "number" ? data.totalMatched : (data.total || 0);
+        var totalPages = Math.max(1, typeof data.totalPages === "number" ? data.totalPages : Math.ceil(totalMatched / currentLimit));
+
+        currentTotalMatched = totalMatched;
+        currentTotalPages = totalPages;
+
+        if (items.length === 0 || totalMatched === 0) {
+          var emptyMsg = activeCard === "errors"
+            ? "Zero errors detected in quarantine DLQ. All records delivered cleanly."
+            : "No records found matching current search/filter criteria.";
+          tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-xs text-zinc-500 font-mono">' + emptyMsg + '</td></tr>';
+          updatePaginationDisplay(0, 1, 1);
           return;
         }
-        if (append) tbody.innerHTML += rowsHtml;
-        else tbody.innerHTML = rowsHtml;
-        updatePaginationUi(data.total, pageOffset, data.contacts.length, append);
+
+        tbody.innerHTML = items.map(renderTableRow).join("");
+        updatePaginationDisplay(totalMatched, currentPage, totalPages);
       } catch (err) {
-        console.error("Load contacts error:", err);
+        console.error("Failed to load table data:", err);
       }
     }
 
-    function updatePaginationUi(total, offset, count, append) {
-      const rangeEl = document.getElementById("pageRangeSpan");
-      const totalEl = document.getElementById("pageTotalSpan");
-      const prevBtn = document.getElementById("btnPrevPage");
-      const nextBtn = document.getElementById("btnNextPage");
-      const moreBtn = document.getElementById("btnLoadMore");
-      if (totalEl) totalEl.innerText = total.toLocaleString("en-US");
-      if (rangeEl) {
-        if (total === 0) rangeEl.innerText = "0 - 0";
-        else {
-          const start = append ? 1 : offset + 1;
-          const end = append ? Math.min(offset + count, total) : Math.min(offset + pageLimit, total);
-          rangeEl.innerText = start + " - " + end;
+    function updatePaginationDisplay(totalMatched, page, totalPages) {
+      var infoEl = document.getElementById("pageInfoText");
+      var btnFirst = document.getElementById("btnFirst");
+      var btnPrev = document.getElementById("btnPrev");
+      var btnNext = document.getElementById("btnNext");
+      var btnLast = document.getElementById("btnLast");
+
+      if (infoEl) {
+        if (totalMatched === 0) {
+          infoEl.innerText = "0 matched records";
+        } else {
+          var start = (page - 1) * currentLimit + 1;
+          var end = Math.min(page * currentLimit, totalMatched);
+          infoEl.innerText = "Showing rows " + start + "–" + end + " of " + totalMatched.toLocaleString("en-US") + " matched records (Page " + page + " of " + totalPages + ")";
         }
       }
-      if (prevBtn) prevBtn.disabled = offset <= 0;
-      if (nextBtn) nextBtn.disabled = offset + pageLimit >= total;
-      if (moreBtn) moreBtn.disabled = (append ? offset + count : offset + pageLimit) >= total;
+
+      if (btnFirst) btnFirst.disabled = page <= 1 || totalMatched === 0;
+      if (btnPrev) btnPrev.disabled = page <= 1 || totalMatched === 0;
+      if (btnNext) btnNext.disabled = page >= totalPages || totalMatched === 0;
+      if (btnLast) btnLast.disabled = page >= totalPages || totalMatched === 0;
     }
 
-    document.getElementById("btnPrevPage").addEventListener("click", () => { pageOffset = Math.max(0, pageOffset - pageLimit); loadContacts(false); });
-    document.getElementById("btnNextPage").addEventListener("click", () => { pageOffset += pageLimit; loadContacts(false); });
-    document.getElementById("btnLoadMore").addEventListener("click", () => { pageOffset += pageLimit; loadContacts(true); });
-
-    function openInspectorFromRow(row) {
-      try { openInspector(JSON.parse(row.getAttribute("data-contact"))); } catch (e) { console.error(e); }
+    // Controls Event Handlers
+    var searchInputEl = document.getElementById("tableSearchInput");
+    if (searchInputEl) {
+      searchInputEl.addEventListener("input", function(e) {
+        clearTimeout(searchDebounceTimer);
+        searchDebounceTimer = setTimeout(function() {
+          currentSearch = e.target.value.trim();
+          currentPage = 1;
+          loadTableData();
+        }, 150);
+      });
     }
 
-    function applyStateToDom(s, stateChanged = false) {
-      const isZero = s.totalSyncedContacts === 0 && s.extractedN === 0;
+    var sortSelectEl = document.getElementById("sortSelect");
+    if (sortSelectEl) {
+      sortSelectEl.addEventListener("change", function(e) {
+        currentSort = e.target.value;
+        currentPage = 1;
+        loadTableData();
+      });
+    }
 
-      document.getElementById("kpi-synced").innerText = s.totalSyncedContacts.toLocaleString("en-US");
-      document.getElementById("kpi-vip").innerText = s.vipBriefCount;
-      document.getElementById("kpi-dlq").innerText = s.dlqPendingE;
-      document.getElementById("kpi-savings").innerText = isZero ? "$0.00" : "$" + s.annualSaasSavingsUsd.toLocaleString("en-US", { minimumFractionDigits: 2 });
-      document.getElementById("phase-banner").innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse mr-1"></span>' + (s.currentPhase || "");
+    var rowsSelectEl = document.getElementById("rowsSelect");
+    if (rowsSelectEl) {
+      rowsSelectEl.addEventListener("change", function(e) {
+        currentLimit = parseInt(e.target.value, 10) || 25;
+        currentPage = 1;
+        loadTableData();
+      });
+    }
 
-      const synTrend = document.getElementById("kpi-synced-trend");
-      if (synTrend) synTrend.innerHTML = isZero ? '<span class="inline-flex items-center font-medium text-zinc-500"><span class="w-1.5 h-1.5 rounded-full bg-zinc-400 mr-1.5"></span>Standby • Awaiting Sync</span>' : s.totalSyncedContacts >= 10000 ? '<span class="inline-flex items-center font-medium text-emerald-700"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>100% Complete • Zero row loss</span>' : s.totalSyncedContacts >= 9800 ? '<span class="inline-flex items-center font-medium text-emerald-700"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>+98.0% First Pass • 200 Held in DLQ</span>' : '<span class="inline-flex items-center font-medium text-amber-700"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5 animate-pulse"></span>10k in Warehouse • Ready to Sync</span>';
-      const vipTrend = document.getElementById("kpi-vip-trend");
-      if (vipTrend) vipTrend.innerHTML = isZero || s.vipBriefCount === 0 ? '<span class="inline-flex items-center font-medium text-zinc-500"><span class="w-1.5 h-1.5 rounded-full bg-zinc-400 mr-1.5"></span>0 Alerts • Normal Margin Profile</span>' : '<span class="inline-flex items-center font-medium text-rose-700"><span class="w-1.5 h-1.5 rounded-full bg-rose-600 mr-1.5"></span>-20.0% Margin Drop • Executive retention call</span>';
-      const dlqDot = document.getElementById("kpi-dlq-dot");
-      if (dlqDot) dlqDot.className = isZero ? "w-2.5 h-2.5 rounded-full bg-zinc-400" : s.dlqPendingE > 0 ? "w-2.5 h-2.5 rounded-full bg-rose-600" : s.dlqResolved > 0 ? "w-2.5 h-2.5 rounded-full bg-amber-500" : "w-2.5 h-2.5 rounded-full bg-emerald-600";
-      const dlqTrend = document.getElementById("kpi-dlq-trend");
-      if (dlqTrend) dlqTrend.innerHTML = isZero ? '<span class="inline-flex items-center text-xs font-medium text-zinc-500"><span class="w-1.5 h-1.5 rounded-full bg-zinc-400 mr-1.5"></span>Standby: 0 Anomalies Held</span>' : s.dlqPendingE > 0 ? '<span class="inline-flex items-center text-xs font-medium text-rose-700"><span class="w-1.5 h-1.5 rounded-full bg-rose-600 mr-1.5"></span>Danger: ' + (s.emailErrorsPending || 150) + ' Email, ' + (s.nanErrorsPending || 50) + ' NaN Held</span>' : '<span class="inline-flex items-center text-xs font-medium text-emerald-700"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>Healthy: 0 Held / ' + s.dlqResolved + ' Repaired</span>';
-      const savTrend = document.getElementById("kpi-savings-trend");
-      if (savTrend) savTrend.innerHTML = isZero ? '<span class="inline-flex items-center font-medium text-zinc-500"><span class="w-1.5 h-1.5 rounded-full bg-zinc-400 mr-1.5"></span>Standby • $4,170/yr projected on active sync</span>' : '<span class="inline-flex items-center font-medium text-emerald-700"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5"></span>99.3% Cost Reduction • $2.50/mo vs $4,200/yr</span>';
+    var btnFirstEl = document.getElementById("btnFirst");
+    if (btnFirstEl) {
+      btnFirstEl.addEventListener("click", function() {
+        if (currentPage > 1) {
+          currentPage = 1;
+          loadTableData();
+        }
+      });
+    }
 
-      const tabAll = document.getElementById("tabCountAll");
-      if (tabAll) tabAll.innerText = s.totalSyncedContacts.toLocaleString("en-US");
-      const tabVip = document.getElementById("tabCountVip");
-      if (tabVip) tabVip.innerText = s.vipBriefCount;
-      const tabRep = document.getElementById("tabCountRepaired");
-      if (tabRep) tabRep.innerText = s.dlqResolved;
+    var btnPrevEl = document.getElementById("btnPrev");
+    if (btnPrevEl) {
+      btnPrevEl.addEventListener("click", function() {
+        if (currentPage > 1) {
+          currentPage -= 1;
+          loadTableData();
+        }
+      });
+    }
 
-      const p3 = document.getElementById("pillar3BalanceText");
-      if (p3) p3.innerHTML = "Extracted: " + s.extractedN + " | Delivered: " + s.syncedS + " | Unchanged Skipped: " + s.skippedO + " | Held: " + s.dlqPendingE;
+    var btnNextEl = document.getElementById("btnNext");
+    if (btnNextEl) {
+      btnNextEl.addEventListener("click", function() {
+        if (currentPage < currentTotalPages) {
+          currentPage += 1;
+          loadTableData();
+        }
+      });
+    }
 
-      renderPowerBiAnalytics(s);
-      renderAreaChart(s);
+    var btnLastEl = document.getElementById("btnLast");
+    if (btnLastEl) {
+      btnLastEl.addEventListener("click", function() {
+        if (currentPage < currentTotalPages) {
+          currentPage = currentTotalPages;
+          loadTableData();
+        }
+      });
+    }
 
-      currentLiveState = s;
-      if (stateChanged && activeTab !== "health") {
-        pageOffset = 0;
-        loadContacts(false);
+    // Inspector Slide-Over Drawer
+    var drawerEl = document.getElementById("inspectorDrawer");
+    var drawerBackdropEl = document.getElementById("drawerBackdrop");
+
+    async function computeClientSha256(str) {
+      var buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+      return Array.from(new Uint8Array(buf)).map(function(b) { return b.toString(16).padStart(2, "0"); }).join("");
+    }
+
+    async function openInspector(c) {
+      if (!c) return;
+      var custIdEl = document.getElementById("drawerCustId");
+      var tierEl = document.getElementById("drawerTier");
+      var jsonEl = document.getElementById("drawerJson");
+      var shaEl = document.getElementById("drawerSha256");
+      var mapEl = document.getElementById("drawerPropMapping");
+
+      if (custIdEl) custIdEl.innerText = c.customer_id || "-";
+      if (tierEl) tierEl.innerText = c.customer_tier || "UNKNOWN";
+      if (jsonEl) jsonEl.innerText = JSON.stringify(c, null, 2);
+      if (shaEl) shaEl.innerText = await computeClientSha256(JSON.stringify(c));
+
+      var mapping = [
+        ["hs_external_customer_id", c.customer_id || "-"],
+        ["company", c.company || "Enterprise Account"],
+        ["country", c.country || "US"],
+        ["email", c.email || "-"],
+        ["hs_net_profitability_usd", "$" + (c.net_profitability_usd || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })],
+        ["hs_profit_margin_pct", (c.profit_margin_pct || 0).toFixed(1) + "%"],
+        ["datapulse_customer_tier", c.customer_tier || "ENTERPRISE"],
+        ["datapulse_remediated_from_dlq", c.remediated_from_dlq ? "true" : "false"],
+        ["datapulse_ai_executive_brief", c.ai_executive_brief || "[Standard Margin Profile]"]
+      ];
+
+      if (c.error_code) {
+        mapping.push(["quarantine_error_code", c.error_code]);
+        mapping.push(["quarantine_error_message", c.error_message || "Contract validation failure"]);
+        mapping.push(["quarantine_status", c.status || "PENDING"]);
       }
+
+      if (mapEl) {
+        mapEl.innerHTML = mapping.map(function(item) {
+          return '<tr class="border-b border-zinc-200"><td class="p-2.5 text-zinc-500 font-mono">' + item[0] + '</td><td class="p-2.5 font-mono font-medium text-zinc-900">' + escapeClientHtml(item[1]) + '</td></tr>';
+        }).join("");
+      }
+
+      if (drawerBackdropEl) {
+        drawerBackdropEl.classList.remove("hidden");
+        setTimeout(function() { drawerBackdropEl.classList.remove("opacity-0"); }, 10);
+      }
+      if (drawerEl) drawerEl.classList.remove("translate-x-full");
+    }
+
+    function closeInspector() {
+      if (drawerEl) drawerEl.classList.add("translate-x-full");
+      if (drawerBackdropEl) {
+        drawerBackdropEl.classList.add("opacity-0");
+        setTimeout(function() { drawerBackdropEl.classList.add("hidden"); }, 200);
+      }
+    }
+
+    if (drawerBackdropEl) drawerBackdropEl.addEventListener("click", closeInspector);
+
+    function openInspectorFromRow(targetEl) {
+      try {
+        var row = targetEl && targetEl.closest ? targetEl.closest("tr") : targetEl;
+        if (!row) return;
+        openInspector(JSON.parse(row.getAttribute("data-contact")));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // State Synchronization
+    function updateKpiCards(s) {
+      var isZero = s.totalSyncedContacts === 0 && s.extractedN === 0;
+
+      var synEl = document.getElementById("kpiSynced");
+      if (synEl) synEl.innerText = s.totalSyncedContacts.toLocaleString("en-US");
+
+      var synTrend = document.getElementById("kpiSyncedTrend");
+      if (synTrend) {
+        synTrend.innerText = isZero
+          ? "Standby: Awaiting Sync"
+          : s.totalSyncedContacts >= 10000
+            ? "100% Complete • Zero row loss"
+            : s.totalSyncedContacts >= 9800
+              ? "+98.0% First Pass • 200 Held in DLQ"
+              : "Sync in progress";
+      }
+
+      var badgeAll = document.getElementById("badgeAll");
+      if (badgeAll) {
+        badgeAll.innerText = isZero ? "0%" : s.totalSyncedContacts >= 10000 ? "+100%" : "+98.0%";
+      }
+
+      var errEl = document.getElementById("kpiErrors");
+      if (errEl) {
+        errEl.innerText = String(s.dlqPendingE);
+        errEl.className = "text-2xl font-bold tracking-tight font-mono " + (s.dlqPendingE > 0 ? "text-rose-600" : "text-zinc-950");
+      }
+
+      var errDot = document.getElementById("kpiErrorsDot");
+      if (errDot) {
+        errDot.className = "w-2.5 h-2.5 rounded-full " + (isZero ? "bg-zinc-400" : s.dlqPendingE > 0 ? "bg-rose-600" : "bg-emerald-600");
+      }
+
+      var errTrend = document.getElementById("kpiErrorsTrend");
+      if (errTrend) {
+        errTrend.innerText = isZero
+          ? "Standby: 0 Anomalies Held"
+          : s.dlqPendingE > 0
+            ? s.dlqPendingE + " Quarantined (" + (s.emailErrorsPending || 150) + " Email, " + (s.nanErrorsPending || 50) + " NaN)"
+            : s.dlqResolved > 0
+              ? "0 Held • " + s.dlqResolved + " Auto-Repaired"
+              : "0 Held • Clean Ingestion";
+      }
+
+      var vipEl = document.getElementById("kpiVip");
+      if (vipEl) vipEl.innerText = String(s.vipBriefCount);
+
+      var vipTrend = document.getElementById("kpiVipTrend");
+      if (vipTrend) {
+        vipTrend.innerText = isZero || s.vipBriefCount === 0
+          ? "0 Alerts • Normal Margin Profile"
+          : s.vipBriefCount + " VIPs with margin < -20% (AI Briefs)";
+      }
+
+      var repEl = document.getElementById("kpiRepaired");
+      if (repEl) repEl.innerText = String(s.dlqResolved);
+
+      var repTrend = document.getElementById("kpiRepairedTrend");
+      if (repTrend) {
+        repTrend.innerText = isZero
+          ? "Standby: 0 Repaired"
+          : s.dlqResolved > 0
+            ? s.dlqResolved + " Records Healed via Replay"
+            : "0 Repaired • Awaiting Replay";
+      }
+
+      var skipEl = document.getElementById("kpiSkipped");
+      if (skipEl) skipEl.innerText = s.skippedO.toLocaleString("en-US") + " Skipped";
+
+      var guardTrend = document.getElementById("kpiGuardrailsTrend");
+      if (guardTrend) {
+        guardTrend.innerText = isZero
+          ? "Standby • Idempotency primed"
+          : s.skippedO > 0
+            ? s.skippedO.toLocaleString("en-US") + " Calls Skipped • 0 API Duplicates"
+            : "SHA-256 Incremental Diffing Active";
+      }
+
+      var guardBalanceText = document.getElementById("guardrailBalanceText");
+      if (guardBalanceText) {
+        guardBalanceText.innerText = "Extracted: " + s.extractedN + " | Delivered: " + s.syncedS + " | Skipped: " + s.skippedO + " | Held: " + s.dlqPendingE;
+      }
+    }
+
+    function updateEngineeringCharts(s) {
+      var isZero = s.totalSyncedContacts === 0 && s.extractedN === 0;
+
+      // Ingestion & Quality Distribution
+      var totalBase = Math.max(1, s.extractedN || s.totalSyncedContacts || 10000);
+      var cleanDelivered = Math.max(0, s.syncedS - s.dlqResolved);
+
+      var barClean = document.getElementById("barDeliveredClean");
+      var barRep = document.getElementById("barRepaired");
+      var barQ = document.getElementById("barQuarantined");
+      var barSkip = document.getElementById("barSkipped");
+
+      if (barClean) barClean.style.width = isZero ? "0%" : Math.min(100, Math.round((cleanDelivered / totalBase) * 100)) + "%";
+      if (barRep) barRep.style.width = isZero ? "0%" : Math.min(100, Math.round((s.dlqResolved / totalBase) * 100)) + "%";
+      if (barQ) barQ.style.width = isZero ? "0%" : Math.min(100, Math.round((s.dlqPendingE / totalBase) * 100)) + "%";
+      if (barSkip) barSkip.style.width = isZero ? "0%" : (s.skippedO > 0 ? "100%" : "0%");
+
+      var cntClean = document.getElementById("countDeliveredClean");
+      var pctClean = document.getElementById("pctDeliveredClean");
+      var cntQ = document.getElementById("countQuarantined");
+      var descQ = document.getElementById("descQuarantined");
+      var cntRep = document.getElementById("countRepaired");
+      var descRep = document.getElementById("descRepaired");
+      var cntSkip = document.getElementById("countSkipped");
+      var descSkip = document.getElementById("descSkipped");
+      var distRatio = document.getElementById("distributionTotalRatio");
+
+      if (cntClean) cntClean.innerText = isZero ? "0" : cleanDelivered.toLocaleString("en-US");
+      if (pctClean) pctClean.innerText = isZero ? "0% of extracted" : Math.round((cleanDelivered / totalBase) * 100) + "% of extracted";
+      if (cntQ) cntQ.innerText = isZero ? "0" : String(s.dlqPendingE);
+      if (descQ) descQ.innerText = (s.emailErrorsPending || 150) + " Email • " + (s.nanErrorsPending || 50) + " NaN";
+      if (cntRep) cntRep.innerText = isZero ? "0" : String(s.dlqResolved);
+      if (descRep) descRep.innerText = s.dlqResolved > 0 ? "Replayed to CRM" : "Awaiting Replay";
+      if (cntSkip) cntSkip.innerText = isZero ? "0" : s.skippedO.toLocaleString("en-US");
+      if (descSkip) descSkip.innerText = s.skippedO > 0 ? "Saved API calls" : "Incremental cache primed";
+      if (distRatio) distRatio.innerText = isZero ? "0 / 0 rows" : s.syncedS.toLocaleString("en-US") + " / " + totalBase.toLocaleString("en-US") + " rows";
+
+      // Net Profitability & Volume by Customer Tier
+      var seg = s.segmentBreakdown || {};
+      var vip = seg.ENTERPRISE_VIP || { annual_revenue: 0, net_profitability_usd: 0, count: 0 };
+      var ent = seg.ENTERPRISE || { annual_revenue: 0, net_profitability_usd: 0, count: 0 };
+      var mm = seg.MID_MARKET || { annual_revenue: 0, net_profitability_usd: 0, count: 0 };
+      var sme = seg.SME || { annual_revenue: 0, net_profitability_usd: 0, count: 0 };
+      var totalRev = vip.annual_revenue + ent.annual_revenue + mm.annual_revenue + sme.annual_revenue;
+      var maxRev = Math.max(totalRev, 1);
+
+      var fillVip = document.getElementById("barFill_ENTERPRISE_VIP");
+      var fillEnt = document.getElementById("barFill_ENTERPRISE");
+      var fillMm = document.getElementById("barFill_MID_MARKET");
+      var fillSme = document.getElementById("barFill_SME");
+
+      if (fillVip) fillVip.style.width = isZero ? "0%" : Math.min(100, Math.round((vip.annual_revenue / maxRev) * 100)) + "%";
+      if (fillEnt) fillEnt.style.width = isZero ? "0%" : Math.min(100, Math.round((ent.annual_revenue / maxRev) * 100)) + "%";
+      if (fillMm) fillMm.style.width = isZero ? "0%" : Math.min(100, Math.round((mm.annual_revenue / maxRev) * 100)) + "%";
+      if (fillSme) fillSme.style.width = isZero ? "0%" : Math.min(100, Math.round((sme.annual_revenue / maxRev) * 100)) + "%";
+
+      var netVip = document.getElementById("segNet_ENTERPRISE_VIP");
+      var netEnt = document.getElementById("segNet_ENTERPRISE");
+      var netMm = document.getElementById("segNet_MID_MARKET");
+      var netSme = document.getElementById("segNet_SME");
+
+      if (netVip) netVip.innerText = isZero ? "Net: $0.00" : "Net: -$" + Math.abs(vip.net_profitability_usd).toLocaleString("en-US", { minimumFractionDigits: 2 });
+      if (netEnt) netEnt.innerText = "Net: +$" + ent.net_profitability_usd.toLocaleString("en-US", { minimumFractionDigits: 2 });
+      if (netMm) netMm.innerText = "Net: +$" + mm.net_profitability_usd.toLocaleString("en-US", { minimumFractionDigits: 2 });
+      if (netSme) netSme.innerText = "Net: +$" + sme.net_profitability_usd.toLocaleString("en-US", { minimumFractionDigits: 2 });
+
+      var cntVip = document.getElementById("segCount_ENTERPRISE_VIP");
+      var cntEnt = document.getElementById("segCount_ENTERPRISE");
+      var cntMm = document.getElementById("segCount_MID_MARKET");
+      var cntSme = document.getElementById("segCount_SME");
+
+      if (cntVip) cntVip.innerText = vip.count.toLocaleString("en-US") + " accounts";
+      if (cntEnt) cntEnt.innerText = ent.count.toLocaleString("en-US") + " accounts";
+      if (cntMm) cntMm.innerText = mm.count.toLocaleString("en-US") + " accounts";
+      if (cntSme) cntSme.innerText = sme.count.toLocaleString("en-US") + " accounts";
+
+      var revVip = document.getElementById("segRev_ENTERPRISE_VIP");
+      var revEnt = document.getElementById("segRev_ENTERPRISE");
+      var revMm = document.getElementById("segRev_MID_MARKET");
+      var revSme = document.getElementById("segRev_SME");
+
+      if (revVip) revVip.innerText = "Rev: $" + vip.annual_revenue.toLocaleString("en-US", { minimumFractionDigits: 2 });
+      if (revEnt) revEnt.innerText = "Rev: $" + ent.annual_revenue.toLocaleString("en-US", { minimumFractionDigits: 2 });
+      if (revMm) revMm.innerText = "Rev: $" + mm.annual_revenue.toLocaleString("en-US", { minimumFractionDigits: 2 });
+      if (revSme) revSme.innerText = "Rev: $" + sme.annual_revenue.toLocaleString("en-US", { minimumFractionDigits: 2 });
+
+      var totRevSpan = document.getElementById("totalSegmentRevSpan");
+      if (totRevSpan) totRevSpan.innerText = "Total Rev: $" + totalRev.toLocaleString("en-US", { minimumFractionDigits: 2 });
     }
 
     async function triggerPipelinePhase(phase, btnEl) {
-      const spinner = document.getElementById("pipelineSpinner");
-      const btns = document.querySelectorAll(".pipeline-step-btn");
-      const originalText = btnEl ? btnEl.innerHTML : "";
-      btns.forEach((b) => b.disabled = true);
-      if (btnEl) btnEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-zinc-400 animate-ping mr-1"></span>Running...';
-      if (spinner) spinner.classList.remove("hidden");
+      var spinner = document.getElementById("pipelineSpinner");
+      var btns = document.querySelectorAll(".pipeline-step-btn");
+      var originalHtml = btnEl ? btnEl.innerHTML : "";
+      btns.forEach(function(b) { b.disabled = true; });
+      if (btnEl) btnEl.classList.add("opacity-60");
+      if (spinner) {
+        spinner.innerText = "Engine executing (" + phase + ")...";
+        spinner.classList.remove("hidden");
+      }
+
       try {
-        const resp = await fetch("/api/v1/pipeline/run-phase", {
+        var resp = await fetch("/api/v1/pipeline/run-phase", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ phase })
+          body: JSON.stringify({ phase: phase })
         });
-        const data = await resp.json();
-        if (data.state) applyStateToDom(data.state, true);
+        var data = await resp.json();
+        if (data.state) {
+          currentLiveState = data.state;
+          lastStateVersion = typeof data.state.stateVersion === "number" ? data.state.stateVersion : lastStateVersion;
+          updateKpiCards(data.state);
+          updateEngineeringCharts(data.state);
+          if (activeCard !== "guardrails") {
+            currentPage = 1;
+            loadTableData();
+          }
+        }
       } catch (err) {
         console.error("Pipeline run error:", err);
       } finally {
-        btns.forEach((b) => b.disabled = false);
-        if (btnEl) btnEl.innerHTML = originalText;
+        btns.forEach(function(b) { b.disabled = false; });
+        if (btnEl) {
+          btnEl.classList.remove("opacity-60");
+          btnEl.innerHTML = originalHtml;
+        }
         if (spinner) spinner.classList.add("hidden");
       }
     }
 
-    const togglePollBtn = document.getElementById("togglePollingBtn");
-    const pollDot = document.getElementById("pollingDot");
-    const pollStatusText = document.getElementById("pollingStatusText");
-    togglePollBtn.addEventListener("click", () => {
-      pollingActive = !pollingActive;
-      pollDot.className = pollingActive ? "w-2 h-2 rounded-full bg-emerald-600" : "w-2 h-2 rounded-full bg-zinc-400";
-      pollStatusText.innerText = pollingActive ? "Auto-Refresh (1.5s)" : "Auto-Refresh: PAUSED";
-    });
-
-    setInterval(async () => {
-      if (!pollingActive) return;
+    // Silent Background Poller (Runs every 1500ms without F5)
+    setInterval(async function() {
       try {
-        const resp = await fetch("/api/v1/state");
+        var resp = await fetch("/api/v1/state");
         if (!resp.ok) return;
-        const s = await resp.json();
-        const changed = s.totalSyncedContacts !== currentLiveState.totalSyncedContacts || s.dlqPendingE !== currentLiveState.dlqPendingE || s.dlqResolved !== currentLiveState.dlqResolved || s.currentPhase !== currentLiveState.currentPhase;
-        applyStateToDom(s, changed);
+        var s = await resp.json();
+        var ver = typeof s.stateVersion === "number" ? s.stateVersion : -1;
+        var changed = ver !== lastStateVersion ||
+          s.totalSyncedContacts !== currentLiveState.totalSyncedContacts ||
+          s.dlqPendingE !== currentLiveState.dlqPendingE ||
+          s.dlqResolved !== currentLiveState.dlqResolved ||
+          s.skippedO !== currentLiveState.skippedO ||
+          s.vipBriefCount !== currentLiveState.vipBriefCount;
+
+        if (changed) {
+          lastStateVersion = ver;
+          currentLiveState = s;
+          updateKpiCards(s);
+          updateEngineeringCharts(s);
+          if (activeCard !== "guardrails") {
+            loadTableData();
+          }
+        }
       } catch (err) {}
     }, 1500);
 
-    setInterval(async () => {
+    // Connector Health Check Poller
+    setInterval(async function() {
       try {
-        const resp = await fetch("/health");
-        const dot = document.getElementById("connDot");
-        const txt = document.getElementById("connText");
+        var resp = await fetch("/health");
+        var dot = document.getElementById("connDot");
+        var txt = document.getElementById("connText");
         if (resp.ok) {
           if (dot) dot.className = "w-1.5 h-1.5 rounded-full bg-emerald-600";
           if (txt) txt.innerText = "Connector Online";
@@ -819,15 +1484,18 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
           if (dot) dot.className = "w-1.5 h-1.5 rounded-full bg-rose-600";
           if (txt) txt.innerText = "Connector Offline";
         }
-      } catch {
-        const dot = document.getElementById("connDot");
-        const txt = document.getElementById("connText");
+      } catch (err) {
+        var dot = document.getElementById("connDot");
+        var txt = document.getElementById("connText");
         if (dot) dot.className = "w-1.5 h-1.5 rounded-full bg-rose-600";
         if (txt) txt.innerText = "Connector Offline";
       }
     }, 5000);
 
-    applyStateToDom(currentLiveState, false);
+    // Initial Setup
+    updateKpiCards(currentLiveState);
+    updateEngineeringCharts(currentLiveState);
+    updateCardStyles();
   </script>
 </body>
 </html>`;

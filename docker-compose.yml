@@ -10,13 +10,13 @@ services:
       dockerfile: infra/docker/Dockerfile.connector
     container_name: datapulse-connectors-ts
     ports:
-      - "3000:3000"
+      - "${CONNECTOR_PORT:-3001}:3000"
     environment:
       - PORT=3000
       - WEBHOOK_HMAC_SECRET=${WEBHOOK_HMAC_SECRET:-default-hmac-secret}
       - ENFORCE_HMAC=${ENFORCE_HMAC:-false}
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -57,17 +57,17 @@ services:
     container_name: datapulse-airflow-orchestrator
     profiles:
       - orchestration
-    depends_on:
-      connectors-ts:
-        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - _PIP_ADDITIONAL_REQUIREMENTS=${_PIP_ADDITIONAL_REQUIREMENTS:-duckdb>=1.0.0 pydantic>=2.0 pyyaml>=6.0}
       - PYTHONPATH=/opt/airflow/core-engine/src
       - SOURCE_ENGINE=${SOURCE_ENGINE:-duckdb_local}
       - DEMO_SEED_ENABLED=${DEMO_SEED_ENABLED:-true}
       - DUCKDB_DATABASE_PATH=/opt/airflow/data/local_warehouse.duckdb
-      - HUBSPOT_API_BASE_URL=http://connectors-ts:3000
+      - HUBSPOT_API_BASE_URL=${HUBSPOT_API_BASE_URL:-http://host.docker.internal:3000}
     volumes:
       - ./orchestration/dags:/opt/airflow/dags:ro
       - ./core-engine:/opt/airflow/core-engine:ro

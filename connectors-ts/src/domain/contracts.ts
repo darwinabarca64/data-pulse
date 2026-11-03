@@ -41,6 +41,7 @@ export const HubSpotContactPropertiesSchema = z
     datapulse_remediated_from_dlq: z.preprocess((v) => v === true || v === "true", z.boolean()).optional(),
     remediated_from_dlq: z.preprocess((v) => v === true || v === "true", z.boolean()).optional(),
   })
+  .passthrough()
   .superRefine((data, ctx) => {
     const cid = data.hs_external_customer_id ?? data.datapulse_customer_id ?? data.customer_id;
     if (!cid || cid.trim().length === 0) {
@@ -82,6 +83,7 @@ export interface NormalizedCrmContact {
   ai_executive_brief: string | null;
   remediated_from_dlq: boolean;
   synced_at: string;
+  custom_properties?: Record<string, unknown>;
 }
 
 export interface RejectedBatchRecord {
@@ -134,13 +136,27 @@ export function validateBatchRecordsGranular(records: unknown[]): GranularValida
       continue;
     }
 
-    const d = parsed.data;
+    const d = parsed.data as Record<string, unknown>;
+    const knownKeys = new Set([
+      "email", "hs_external_customer_id", "datapulse_customer_id", "customer_id",
+      "hs_net_profitability_usd", "datapulse_net_profitability_usd", "net_profitability_usd",
+      "hs_profit_margin_pct", "datapulse_profit_margin_pct", "profit_margin_pct",
+      "annualrevenue", "annual_revenue", "datapulse_annual_cost", "annual_cost",
+      "company", "company_name", "country", "country_code", "hs_currency_code", "currency_code",
+      "datapulse_customer_tier", "customer_tier", "datapulse_ai_executive_brief", "ai_executive_brief",
+      "datapulse_remediated_from_dlq", "remediated_from_dlq", "properties",
+    ]);
+    const customProps: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(candidate)) {
+      if (!knownKeys.has(k)) customProps[k] = v;
+    }
+
     validRecords.push({
       customer_id: String(d.hs_external_customer_id ?? d.datapulse_customer_id ?? d.customer_id),
-      email: d.email,
-      company: d.company ?? d.company_name ?? "Enterprise Account",
-      country: d.country ?? d.country_code ?? "US",
-      currency_code: d.hs_currency_code ?? d.currency_code ?? "USD",
+      email: String(d.email),
+      company: String(d.company ?? d.company_name ?? "Enterprise Account"),
+      country: String(d.country ?? d.country_code ?? "US"),
+      currency_code: String(d.hs_currency_code ?? d.currency_code ?? "USD"),
       annual_revenue: Number(d.annualrevenue ?? d.annual_revenue ?? 0),
       annual_cost: Number(d.datapulse_annual_cost ?? d.annual_cost ?? 0),
       net_profitability_usd: Number(
@@ -149,10 +165,11 @@ export function validateBatchRecordsGranular(records: unknown[]): GranularValida
       profit_margin_pct: Number(
         d.hs_profit_margin_pct ?? d.datapulse_profit_margin_pct ?? d.profit_margin_pct
       ),
-      customer_tier: d.datapulse_customer_tier ?? d.customer_tier ?? "ENTERPRISE",
-      ai_executive_brief: d.datapulse_ai_executive_brief ?? d.ai_executive_brief ?? null,
+      customer_tier: String(d.datapulse_customer_tier ?? d.customer_tier ?? "ENTERPRISE"),
+      ai_executive_brief: (d.datapulse_ai_executive_brief ?? d.ai_executive_brief ?? null) as string | null,
       remediated_from_dlq: Boolean(d.datapulse_remediated_from_dlq ?? d.remediated_from_dlq ?? false),
       synced_at: nowIso,
+      custom_properties: Object.keys(customProps).length > 0 ? customProps : undefined,
     });
   }
 
