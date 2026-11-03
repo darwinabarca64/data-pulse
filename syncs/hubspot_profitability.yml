@@ -36,4 +36,4 @@ destination:
     profit_margin_pct: "datapulse_profit_margin_pct"
     customer_tier: "datapulse_customer_tier"
     ai_executive_brief: "datapulse_ai_executive_brief"
-
+    remediated_from_dlq: "datapulse_remediated_from_dlq"

@@ -33,20 +33,21 @@ class DLQStage(str, Enum):
 class CustomerProfitabilityRecord(BaseModel):
     """Validated analytical customer profitability contract for Reverse ETL syncs."""
 
-    model_config = ConfigDict(extra="forbid", validate_default=True)
+    model_config = ConfigDict(extra="allow", validate_default=True)
 
     customer_id: str = Field(..., min_length=1)
     email: str = Field(..., min_length=3)
-    company_name: str = Field(..., min_length=1)
-    country_code: str = Field(..., min_length=2, max_length=2)
-    currency_code: str = Field(..., min_length=3, max_length=3)
-    annual_revenue: float
-    annual_cost: float
-    net_profitability_usd: float
-    profit_margin_pct: float
-    customer_tier: CustomerTier
-    updated_at: datetime
+    company_name: str = Field(default="Unspecified Corp", min_length=1)
+    country_code: str = Field(default="US", min_length=2, max_length=2)
+    currency_code: str = Field(default="USD", min_length=3, max_length=3)
+    annual_revenue: float = 0.0
+    annual_cost: float = 0.0
+    net_profitability_usd: float = 0.0
+    profit_margin_pct: float = 0.0
+    customer_tier: CustomerTier = CustomerTier.SME
+    updated_at: datetime = Field(default_factory=datetime.now)
     ai_executive_brief: str | None = None
+    remediated_from_dlq: bool = False
 
     @field_validator(
         "annual_revenue",
