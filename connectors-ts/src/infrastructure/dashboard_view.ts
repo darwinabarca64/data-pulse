@@ -68,6 +68,9 @@ export interface CrmStoreState {
   nanErrorRange?: string | null;
   quarantinedErrors?: QuarantinedErrorRecord[];
   batches?: BatchBufferEntry[];
+  lastAirflowDagRunId?: string | null;
+  airflowOnline?: boolean;
+  airflowDagStatus?: string;
 }
 
 function escapeHtml(text: unknown): string {
@@ -185,9 +188,23 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
         <span class="text-base font-bold tracking-tight text-zinc-950 font-sans select-none">Data Pulse</span>
       </div>
 
-      <!-- Right: Toggle Switch (ON=Green / OFF=Red) -->
+      <!-- Right: Actions, Airflow Link & Toggle Switch -->
       <div class="flex items-center gap-3 shrink-0">
         <span id="pipelineSpinner" class="hidden text-zinc-600 font-mono text-[11px] animate-pulse px-2 py-0.5 bg-zinc-100 rounded-md border border-zinc-200">Engine executing...</span>
+
+        <!-- Open Airflow (:8080) Button & Badge -->
+        <a href="http://localhost:8080" target="_blank" rel="noopener noreferrer" class="group relative inline-flex items-center gap-2 px-3 py-1 rounded-lg text-xs font-semibold bg-zinc-900 text-white hover:bg-zinc-800 transition shadow-sm" title="User: admin | Pass: datapulse2026">
+          <svg class="w-3.5 h-3.5 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+            <polyline points="15 3 21 3 21 9"/>
+            <line x1="10" y1="14" x2="21" y2="3"/>
+          </svg>
+          <span>Open Airflow (:8080)</span>
+          <span id="airflowBadge" class="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-mono bg-zinc-800 text-sky-300 border border-zinc-700">${state.lastAirflowDagRunId ? "DAG: Run" : (state.airflowOnline ? "DAG: Online" : "DAG: Ready")}</span>
+          <span class="absolute top-full mt-1.5 right-0 hidden group-hover:block whitespace-nowrap bg-zinc-900 text-zinc-200 text-[11px] font-mono py-1 px-2.5 rounded shadow-lg border border-zinc-700 z-50">
+            User: admin | Pass: datapulse2026
+          </span>
+        </a>
 
         <div class="flex items-center gap-2 select-none" id="connPill" title="Connector Health Status">
           <div id="connSwitchTrack" class="relative inline-flex h-5 w-9 shrink-0 cursor-default items-center rounded-full bg-emerald-600 p-0.5 transition-colors duration-200 ease-in-out shadow-inner">
@@ -1351,6 +1368,17 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
     function updateKpiCards(s) {
       var isZero = s.totalSyncedContacts === 0 && s.extractedN === 0;
 
+      var airflowBadge = document.getElementById("airflowBadge");
+      if (airflowBadge) {
+        if (s.lastAirflowDagRunId) {
+          airflowBadge.innerText = "DAG: " + String(s.lastAirflowDagRunId).slice(-8);
+        } else if (s.airflowOnline) {
+          airflowBadge.innerText = "DAG: Online";
+        } else {
+          airflowBadge.innerText = "DAG: Ready";
+        }
+      }
+
       var synEl = document.getElementById("kpiSynced");
       if (synEl) synEl.innerText = s.totalSyncedContacts.toLocaleString("en-US");
 
@@ -1624,7 +1652,9 @@ export function renderLiveDashboardHtml(state: CrmStoreState, initialFilter = ""
           s.dlqPendingE !== currentLiveState.dlqPendingE ||
           s.dlqResolved !== currentLiveState.dlqResolved ||
           s.skippedO !== currentLiveState.skippedO ||
-          s.vipBriefCount !== currentLiveState.vipBriefCount;
+          s.vipBriefCount !== currentLiveState.vipBriefCount ||
+          s.lastAirflowDagRunId !== currentLiveState.lastAirflowDagRunId ||
+          s.airflowOnline !== currentLiveState.airflowOnline;
 
         if (changed) {
           lastStateVersion = ver;

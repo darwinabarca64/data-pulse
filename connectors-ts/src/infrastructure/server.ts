@@ -55,6 +55,9 @@ export interface ExtendedCrmStoreState extends CrmStoreState {
   nanErrorRange: string | null;
   quarantinedErrors: QuarantinedErrorRecord[];
   batches: BatchBufferEntry[];
+  lastAirflowDagRunId: string | null;
+  airflowOnline: boolean;
+  airflowDagStatus: string;
 }
 
 function findRepoRoot(): string {
@@ -77,17 +80,23 @@ function getPythonBinary(): string {
   if (process.env.PYTHON_BIN) return process.env.PYTHON_BIN;
   if (process.platform === "win32") {
     if (fs.existsSync("C:\\Python314\\python.exe")) return "C:\\Python314\\python.exe";
+    return "python";
   }
-  return "python";
+  return "python3";
 }
 
 function runPythonCli(args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
     const root = findRepoRoot();
     const pythonBin = getPythonBinary();
+    const envPythonPath = process.env.PYTHONPATH || path.join(root, "core-engine", "src");
     const child = spawn(pythonBin, ["-m", "datapulse.interfaces.cli", ...args], {
       cwd: root,
-      env: { ...process.env, PYTHONPATH: path.join(root, "core-engine", "src") },
+      env: {
+        ...process.env,
+        PYTHONPATH: envPythonPath,
+        HUBSPOT_API_BASE_URL: process.env.HUBSPOT_API_BASE_URL || "http://127.0.0.1:3000",
+      },
     });
     let stdout = "";
     let stderr = "";
@@ -102,6 +111,52 @@ function runPythonCli(args: string[]): Promise<{ code: number; stdout: string; s
   });
 }
 
+async function triggerAirflowDagRun(): Promise<{ online: boolean; dagRunId: string | null; status: string }> {
+  const baseUrl = (process.env.AIRFLOW_API_BASE_URL || "http://localhost:8080").replace(/\/$/, "");
+  const username = process.env.AIRFLOW_USERNAME || "admin";
+  const password = process.env.AIRFLOW_PASSWORD || "datapulse2026";
+  const authHeader = "Basic " + Buffer.from(`${username}:${password}`).toString("base64");
+  const dagId = "datapulse_hubspot_profitability_sync";
+
+  try {
+    const patchController = new AbortController();
+    const patchTimeout = setTimeout(() => patchController.abort(), 2000);
+    await fetch(`${baseUrl}/api/v1/dags/${dagId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: authHeader,
+      },
+      body: JSON.stringify({ is_paused: false }),
+      signal: patchController.signal,
+    }).catch(() => null);
+    clearTimeout(patchTimeout);
+
+    const postController = new AbortController();
+    const postTimeout = setTimeout(() => postController.abort(), 2500);
+    const runResp = await fetch(`${baseUrl}/api/v1/dags/${dagId}/dagRuns`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: authHeader,
+      },
+      body: JSON.stringify({
+        conf: { triggered_by: "datapulse-mission-control-ui" },
+      }),
+      signal: postController.signal,
+    });
+    clearTimeout(postTimeout);
+
+    if (runResp.ok) {
+      const data = (await runResp.json()) as { dag_run_id?: string; state?: string };
+      return { online: true, dagRunId: data.dag_run_id ?? null, status: data.state ?? "queued" };
+    }
+    return { online: true, dagRunId: null, status: `HTTP ${runResp.status}` };
+  } catch {
+    return { online: false, dagRunId: null, status: "Airflow unreachable" };
+  }
+}
+
 export class CrmMemoryStore {
   private readonly contactsById = new Map<string, NormalizedCrmContact>();
   private readonly idempotencyCache = new Map<string, BatchUpsertResponse>();
@@ -114,6 +169,16 @@ export class CrmMemoryStore {
   public totalBatchRequests = 0;
   public rateLimitRetriesAbsorbed = 0;
   public rejectedRecordCount = 0;
+  public lastAirflowDagRunId: string | null = null;
+  public airflowOnline = false;
+  public airflowDagStatus = "IDLE";
+
+  public setAirflowStatus(status: { online: boolean; dagRunId: string | null; status: string }): void {
+    this.airflowOnline = status.online;
+    if (status.dagRunId) this.lastAirflowDagRunId = status.dagRunId;
+    this.airflowDagStatus = status.status;
+    this.stateVersion += 1;
+  }
 
   private ensureQuarantinePopulated(): void {
     if (this.quarantinedErrors.size > 0) return;
@@ -355,6 +420,9 @@ export class CrmMemoryStore {
     this.totalBatchRequests = 0;
     this.rateLimitRetriesAbsorbed = 0;
     this.rejectedRecordCount = 0;
+    this.lastAirflowDagRunId = null;
+    this.airflowOnline = false;
+    this.airflowDagStatus = "IDLE";
     this.stateVersion += 1;
   }
 
@@ -488,6 +556,9 @@ export class CrmMemoryStore {
       batches: isStage0 ? [] : this.batches,
       segmentBreakdown,
       contacts: showcase,
+      lastAirflowDagRunId: this.lastAirflowDagRunId,
+      airflowOnline: this.airflowOnline,
+      airflowDagStatus: this.airflowDagStatus,
     };
   }
 }
@@ -593,6 +664,17 @@ export function createConnectorServer(options: ConnectorServerOptions = {}): {
           });
           return;
         }
+        if (phase === "init") {
+          wipeDuckDbFiles();
+          const result = await runPythonCli(["init", "--rows", "10000", "--db-path", "data/local_warehouse.duckdb"]);
+          sendJson(res, result.code === 0 ? 200 : 500, {
+            ok: result.code === 0,
+            phase,
+            state: store.getState(),
+            consoleOutput: result.stdout || result.stderr,
+          });
+          return;
+        }
         if (phase === "sync") {
           const dbPath = path.join(findRepoRoot(), "data", "local_warehouse.duckdb");
           if (!fs.existsSync(dbPath) || store.getState().totalSyncedContacts === 0) {
@@ -600,6 +682,18 @@ export function createConnectorServer(options: ConnectorServerOptions = {}): {
             await runPythonCli(["init", "--rows", "10000", "--db-path", "data/local_warehouse.duckdb"]);
           }
           const result = await runPythonCli(["run", "--manifest", "syncs/hubspot_profitability.yml", "--db-path", "data/local_warehouse.duckdb"]);
+          const airflowRes = await triggerAirflowDagRun();
+          store.setAirflowStatus(airflowRes);
+          sendJson(res, result.code === 0 ? 200 : 500, {
+            ok: result.code === 0,
+            phase,
+            state: store.getState(),
+            consoleOutput: result.stdout || result.stderr,
+          });
+          return;
+        }
+        if (phase === "inspect") {
+          const result = await runPythonCli(["dlq", "inspect", "--sync-id", "hubspot_customer_profitability", "--db-path", "data/local_warehouse.duckdb"]);
           sendJson(res, result.code === 0 ? 200 : 500, {
             ok: result.code === 0,
             phase,
@@ -611,6 +705,8 @@ export function createConnectorServer(options: ConnectorServerOptions = {}): {
         if (phase === "replay") {
           await runPythonCli(["dlq", "inspect", "--sync-id", "hubspot_customer_profitability", "--db-path", "data/local_warehouse.duckdb"]);
           const result = await runPythonCli(["dlq", "replay", "--manifest", "syncs/hubspot_profitability.yml", "--db-path", "data/local_warehouse.duckdb"]);
+          const airflowRes = await triggerAirflowDagRun();
+          store.setAirflowStatus(airflowRes);
           sendJson(res, result.code === 0 ? 200 : 500, {
             ok: result.code === 0,
             phase,
@@ -621,6 +717,8 @@ export function createConnectorServer(options: ConnectorServerOptions = {}): {
         }
         if (phase === "idempotent") {
           const result = await runPythonCli(["run", "--manifest", "syncs/hubspot_profitability.yml", "--db-path", "data/local_warehouse.duckdb"]);
+          const airflowRes = await triggerAirflowDagRun();
+          store.setAirflowStatus(airflowRes);
           sendJson(res, result.code === 0 ? 200 : 500, {
             ok: result.code === 0,
             phase,

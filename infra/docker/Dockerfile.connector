@@ -1,20 +1,29 @@
 # ============================================================================
 # DataPulse TypeScript Connector & Live Monitor (infra/docker/Dockerfile.connector)
+# Multi-runtime image: Node.js 22 + Python 3.11 with DuckDB & DataPulse CLI
 # ============================================================================
-FROM node:22-alpine
+FROM node:22-slim
 
-ENV NODE_ENV=production \
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app/core-engine/src \
     PORT=3000
 
 WORKDIR /app
 
-COPY connectors-ts/package.json ./
-COPY connectors-ts/tsconfig.json ./
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends python3 python3-pip python3-setuptools && \
+    ln -sf /usr/bin/python3 /usr/bin/python && \
+    pip install --no-cache-dir --break-system-packages duckdb pydantic pyyaml && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY connectors-ts/package.json connectors-ts/tsconfig.json ./
 RUN npm install --no-package-lock
+
+ENV NODE_ENV=production
 
 COPY connectors-ts/src/ ./src/
 
 EXPOSE 3000
 
 CMD ["npm", "start"]
-
