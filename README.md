@@ -352,10 +352,6 @@ All architectural specifications, decision records, and operational procedures a
 | **Runbook 08** | [08-cicd-quality-gates-and-dockerhub-publishing.md](./docs/runbooks/08-cicd-quality-gates-and-dockerhub-publishing.md) | Local 4-Gate pre-push script, standalone `docker run` networking, and `:sha-<commit>` rollbacks. |
 | **Runbook 09** | [09-custom-database-and-schema-integration.md](./docs/runbooks/09-custom-database-and-schema-integration.md) | Integrating arbitrary schemas (5,555 records, E-commerce/SaaS models) and cloud cutover. |
 
-### Technical Architecture Reference
-
-- [**V1 Architecture Reference & Engineering Specification**](./docs/architecture/V1-ARCHITECTURE-REFERENCE.md): Technical audit, FinOps invariants, and Staff-Grade user experience foundation.
-
 ---
 
 ## License & Author

@@ -107,12 +107,6 @@ Every runbook contains an ASCII architecture diagram, copy-pasteable CLI/SQL com
 
 ---
 
-## 5. Architectural Reference Specifications
-
-- [V1-ARCHITECTURE-REFERENCE.md](architecture/V1-ARCHITECTURE-REFERENCE.md): Technical audit, telemetry specifications, FinOps math invariants, and Staff-Grade user experience foundation.
-
----
-
 ## 5. Platform Quantitative & FinOps Invariants Summary
 
 | Domain Area | Enforced Quantitative Metric / Invariant | Verification Artifact |

@@ -50,7 +50,6 @@ DOC_EXEMPT_NAMES = {
     "GUIA_DE_USO_DATAPULSE.md",
     "INFORME_MAESTRO_DATAPULSE.md",
     "UI-DATA-AUDIT.md",
-    "V1-ARCHITECTURE-REFERENCE.md",
     "dashboard_view.ts",
     "server.ts",
     "package-lock.json",
