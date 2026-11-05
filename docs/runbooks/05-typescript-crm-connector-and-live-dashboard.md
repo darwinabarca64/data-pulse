@@ -172,15 +172,40 @@ Expected `POST /api/v1/reset` JSON Response:
 
 ---
 
-## 4. Security Hardening (`ENFORCE_HMAC=true` & `5MB` Payload Cap) and SSR Table Slicing
+## 4. Modern Executive Console Architecture, Interactive Controls & Search
 
+The live Executive Console (`dashboard_view.ts`) served on `http://localhost:3000` provides full reverse-ETL observability and bidirectional pipeline control:
+
+### 4.1 The 5 Interactive KPI Cards
+The top monitoring panel features 5 interactive KPI cards that double as tab selectors:
+1. **Total Synced Contacts (`cardAll`):** Displays total synchronized records in CRM store (e.g., `10,000` contacts). Click to view all active contacts.
+2. **Quarantined DLQ Anomalies (`cardErrors`):** Displays records diverted to DLQ (`200` rows during chaos phase, `0` once healed). Click to filter errors.
+3. **VIP Margin Alerts (`cardVip`):** Displays accounts flagged with severe negative margins (`< -12.0%`, `60` accounts) and AI executive briefs.
+4. **Repaired & Replayed (`cardRepaired`):** Displays records remediated from DLQ (`200` healed RFC emails and IEEE-754 floats).
+5. **Engine FinOps & Airflow Orchestration (`cardGuardrails`):** Displays live DAG health, FinOps cost savings metrics (`$4,170/yr`), and Snowflake warehouse limits.
+
+### 4.2 The 4 Interactive Pipeline Trigger Cards
+The console provides one-click action cards that execute the Python engine inside the container and trigger Airflow via REST API:
+- **Trigger Full Sync (`/api/v1/trigger` with `phase=sync`):** Seeds DuckDB warehouse, executes initial sync, and triggers Airflow DAG run.
+- **Run AI Forensic Triage (`phase=inspect`):** Executes out-of-band PII-redacted forensic analysis on quarantined rows.
+- **Surgical DLQ Replay (`phase=replay`):** Applies deterministic regex/float sanitizers, replays 200 rows over HTTP, and triggers Airflow DAG run.
+- **Reset Telemetry & State (`phase=reset`):** Purges DuckDB database files and resets memory store to Stage 0 Honest Zero Baseline.
+
+### 4.3 Open Airflow (:8080) Navigation & Status Badge
+The top-right header contains an `Open Airflow (:8080)` link button that displays real-time DAG execution state (IDLE, RUNNING, or SUCCESS) and opens `http://localhost:8080` in a new browser tab.
+
+### 4.4 Server-Side Search, Filtering & Bounded Pagination (`/api/v1/contacts`)
+- **Query Endpoint:** `GET /api/v1/contacts?search=<q>&tab=<tab>&tier=<tier>&page=<page>&limit=<limit>&sort=<sort>`
+- **Live Search Bar:** Filters contacts dynamically across `customer_id`, `email`, and `ai_executive_brief`.
+- **Detected Errors Only Checkbox:** Instantly toggles display of quarantined anomalous records.
+- **Bounded Pagination:** Controls page sizes (10, 25, 50, 100) with first, previous, next, and last navigation controls, avoiding heavy DOM allocations.
+
+### 4.5 Security Hardening (`ENFORCE_HMAC=true` & `5MB` Payload Cap)
 1. **Strict HMAC Enforcement (`ENFORCE_HMAC=true`):**
-   - By default in local development, if `X-HubSpot-Signature-v3` and `X-HubSpot-Request-Timestamp` headers are present (which `HttpCRMConnectorClient` always sends), `server.ts` validates the signature using `crypto.timingSafeEqual`.
-   - Setting `ENFORCE_HMAC=true` in `.env` forces `server.ts` to reject any `POST /crm/v3/objects/contacts/batch/upsert` request that omits the `X-HubSpot-Signature-v3` header with `HTTP 401 INVALID_HMAC_SIGNATURE`.
+   - Validates incoming `X-HubSpot-Signature-v3` and `X-HubSpot-Request-Timestamp` using `crypto.timingSafeEqual`.
+   - Setting `ENFORCE_HMAC=true` in `.env` rejects unsigned requests with `HTTP 401 INVALID_HMAC_SIGNATURE`.
 2. **5MB Request Body Guard (`HTTP 413`):**
-   - `readRequestBody()` monitors streaming byte length and immediately destroys sockets exceeding `5,242,880` bytes (`5MB`), returning `HTTP 413 PAYLOAD_TOO_LARGE`.
-3. **Why the Live SSR Dashboard Table Renders 50 Rows While KPI Shows `9,800` / `10,000`:**
-   - Rendering 10,000 HTML `<tr>` DOM nodes on every browser refresh would bloat the HTML response to ~6MB. `InMemoryContactStore.getSnapshot()` tracks all `10,000` contacts in its `Map<string, ContactRecord>` (reflected accurately in the **Total Synced Contacts** KPI card) while slicing the top `50` records (sorting `ENTERPRISE_VIP` accounts with negative margins `< -12%` to the top of the table) for instant `< 15ms` browser rendering.
+   - `readRequestBody()` terminates streaming payloads exceeding `5,242,880` bytes (`5MB`), returning `HTTP 413 PAYLOAD_TOO_LARGE`.
 
 ---
 

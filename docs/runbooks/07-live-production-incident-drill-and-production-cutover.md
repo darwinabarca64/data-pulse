@@ -82,11 +82,28 @@ python scripts/live_incident_drill.py
 
 ---
 
-## PART A / SECTION 2: Mode 2 — Interactive 2-Terminal + Live Web Dashboard (`http://localhost:3000`) Walkthrough
+## PART A / SECTION 2: Mode 2 — Interactive Live Executive Console (`http://localhost:3000`) & Operator Walkthrough
 
-Use **Mode 2** when demonstrating the platform live to stakeholders, auditing the UI in a browser, or training SRE operators on manual incident triage and recovery.
+Use **Mode 2** when demonstrating the platform live to stakeholders, operating the UI in a browser, or training SRE operators on incident triage and recovery.
 
-### 2.1 Operator State Verification Table Across Steps A -> E
+### 2.1 Operating the Drill via the 4 Interactive Browser Action Cards (Docker Compose)
+
+If running the containerized stack via `docker compose up -d --build`:
+1. Open `http://localhost:3000` in your browser.
+2. Click **Trigger Ingest & Sync**: Spawns Python CLI inside Docker, seeds DuckDB, syncs 9,800 contacts over HTTP, and triggers Airflow DAG run.
+3. Click **Run AI Forensic Triage**: Runs out-of-band PII-redacted inspection of 200 quarantined rows.
+4. Click **Surgical DLQ Replay**: Auto-remediates 150 invalid emails and 50 IEEE-754 NaNs, replays 200 rows (+2 HTTP batches), and achieves 10,000 / 10,000 contacts with 0 pending DLQ.
+5. Click **Open Airflow (:8080)** in the top right to verify live DAG status (`admin` / `datapulse2026`).
+6. Click **Reset Telemetry & State** to return to Stage 0 Honest Zero Baseline.
+
+### 2.2 Preventing Port 3000 / 8080 Collisions During Local Development
+If you prefer running manual commands in two terminals on your host machine without Docker:
+```bash
+# Ensure Docker stack is stopped so ports 3000 and 8080 are free
+docker compose stop
+```
+
+### 2.3 Operator State Verification Table Across Steps A -> E
 
 Keep this table open as your ground-truth scorecard while executing Steps A through E below:
 
@@ -100,7 +117,7 @@ Keep this table open as your ground-truth scorecard while executing Steps A thro
 
 ---
 
-### 2.2 Step-by-Step Interactive Walkthrough (Terminal 1 + Terminal 2 + Web Browser)
+### 2.4 Step-by-Step Interactive Walkthrough (Terminal 1 + Terminal 2 + Web Browser)
 
 #### Step A: Start the Live CRM Server (Terminal 1), Open the Browser (`:3000`), and Seed 10,000 Rows (Terminal 2)
 

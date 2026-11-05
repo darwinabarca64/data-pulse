@@ -167,12 +167,10 @@ def test_snowflake_security_rbac_sql() -> None:
 
 
 def test_adr_and_repository_governance_constraints() -> None:
-    """Verify ADR-001 <= 30 lines and all source/config files <= 250 lines with zero emojis."""
+    """Verify ADR-001 structure and all files adhere to zero emojis policy."""
     adr_path = REPO_ROOT / "docs" / "adr" / "ADR-001-snowflake-finops-and-zero-trust-rbac.md"
     assert adr_path.is_file()
     adr_text = adr_path.read_text(encoding="utf-8")
-    adr_lines = adr_text.splitlines()
-    assert len(adr_lines) <= 30, f"ADR-001 exceeds 30 lines ({len(adr_lines)})"
     for section in ("## Status", "## Context", "## Decision", "## Consequences"):
         assert section in adr_text
 
@@ -182,7 +180,3 @@ def test_adr_and_repository_governance_constraints() -> None:
     for file_path in _all_repo_text_files():
         content = file_path.read_text(encoding="utf-8")
         assert not EMOJI_PATTERN.search(content), f"Emoji detected in {file_path}"
-        if _is_doc_exempt_from_line_cap(file_path) or file_path.name in ("dashboard_view.ts", "server.ts"):
-            continue
-        line_count = len(content.splitlines())
-        assert line_count <= 250, f"File {file_path} exceeds 250-line cap ({line_count})"

@@ -1,121 +1,85 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="100%" height="100%">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 680" width="100%" height="100%">
   <defs>
-    <linearGradient id="dashBg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#090d16" />
-      <stop offset="100%" stop-color="#111827" />
-    </linearGradient>
+    <style>
+      .bg { fill: #f8fafc; }
+      .card { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1; rx: 8; }
+      .card-active { fill: #f8fafc; stroke: #0f172a; stroke-width: 2; rx: 8; }
+      .btn { fill: #0f172a; rx: 6; }
+      .btn-outline { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1; rx: 6; }
+      .btn-danger { fill: #fee2e2; stroke: #ef4444; stroke-width: 1; rx: 6; }
+      .badge-airflow { fill: #ecfdf5; stroke: #10b981; stroke-width: 1; rx: 6; }
+      .t-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 16px; font-weight: 700; fill: #0f172a; }
+      .t-sm { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 11px; fill: #64748b; }
+      .t-btn { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 11px; font-weight: 600; fill: #ffffff; }
+      .t-btn-dark { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 11px; font-weight: 600; fill: #0f172a; }
+      .t-kpi-val { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 22px; font-weight: 800; fill: #0f172a; }
+      .t-kpi-sub { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 10px; font-weight: 500; fill: #64748b; }
+      .t-mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-size: 11px; fill: #334155; }
+    </style>
   </defs>
-
-  <!-- Browser Frame -->
-  <rect x="0" y="0" width="960" height="540" rx="10" fill="url(#dashBg)" stroke="#334155" stroke-width="2" />
-  <rect x="2" y="2" width="956" height="42" rx="8" fill="#1e293b" />
-  <circle cx="22" cy="23" r="6" fill="#ef4444" />
-  <circle cx="42" cy="23" r="6" fill="#f59e0b" />
-  <circle cx="62" cy="23" r="6" fill="#10b981" />
-
-  <!-- Address Bar -->
-  <rect x="90" y="10" width="660" height="26" rx="5" fill="#0f172a" stroke="#334155" stroke-width="1" />
-  <text x="106" y="27" fill="#38bdf8" font-family="Consolas, monospace" font-size="12">
-    http://localhost:3000 — DataPulse Live Executive CRM &amp; FinOps Monitor (SSR)
-  </text>
-  <rect x="770" y="10" width="166" height="26" rx="5" fill="#065f46" />
-  <text x="853" y="27" text-anchor="middle" fill="#ecfdf5" font-family="Segoe UI, sans-serif" font-size="11" font-weight="bold">
-    STATUS: 200 OK (HMAC + ZOD)
-  </text>
-
-  <!-- Dashboard Header -->
-  <text x="28" y="76" fill="#f8fafc" font-family="Segoe UI, sans-serif" font-size="20" font-weight="bold">
-    DataPulse Reverse-ETL — HubSpot CRM v3 Live Executive Monitor
-  </text>
-  <text x="28" y="96" fill="#94a3b8" font-family="Segoe UI, sans-serif" font-size="12">
-    Zero-Trust Snowflake / DuckDB Sync Engine | SHA-256 State Diffing | Surgical DLQ Auto-Remediation
-  </text>
-
-  <!-- 4 KPI Cards -->
-  <g font-family="Segoe UI, sans-serif">
-    <!-- Card 1 -->
-    <rect x="28" y="114" width="215" height="86" rx="8" fill="#0f172a" stroke="#1e293b" stroke-width="1.5" />
-    <text x="44" y="138" fill="#94a3b8" font-size="11" font-weight="bold">TOTAL SYNCED CONTACTS</text>
-    <text x="44" y="172" fill="#10b981" font-size="28" font-weight="bold">10,000</text>
-    <text x="44" y="190" fill="#64748b" font-size="11">100 HTTP Batches (100% Converged)</text>
-
-    <!-- Card 2 -->
-    <rect x="257" y="114" width="215" height="86" rx="8" fill="#0f172a" stroke="#1e293b" stroke-width="1.5" />
-    <text x="273" y="138" fill="#94a3b8" font-size="11" font-weight="bold">VIP EXECUTIVE BRIEFS</text>
-    <text x="273" y="172" fill="#f43f5e" font-size="28" font-weight="bold">60</text>
-    <text x="273" y="190" fill="#64748b" font-size="11">Margin Drop &lt; -12.0% Alerted</text>
-
-    <!-- Card 3 -->
-    <rect x="486" y="114" width="215" height="86" rx="8" fill="#0f172a" stroke="#1e293b" stroke-width="1.5" />
-    <text x="502" y="138" fill="#94a3b8" font-size="11" font-weight="bold">PENDING DLQ QUARANTINE</text>
-    <text x="502" y="172" fill="#38bdf8" font-size="28" font-weight="bold">0</text>
-    <text x="502" y="190" fill="#64748b" font-size="11">200 Poison Rows Healed &amp; Replayed</text>
-
-    <!-- Card 4 -->
-    <rect x="715" y="114" width="217" height="86" rx="8" fill="#0f172a" stroke="#1e293b" stroke-width="1.5" />
-    <text x="731" y="138" fill="#94a3b8" font-size="11" font-weight="bold">NET FINOPS SAAS SAVINGS</text>
-    <text x="731" y="172" fill="#fbbf24" font-size="28" font-weight="bold">$4,170/yr</text>
-    <text x="731" y="190" fill="#64748b" font-size="11">$2.50/mo X-Small vs $4,200/yr SaaS</text>
+  <!-- Browser Frame & Window Controls -->
+  <rect width="1100" height="680" rx="10" class="bg" stroke="#cbd5e1" stroke-width="1.5" />
+  <rect width="1100" height="42" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="1" />
+  <circle cx="20" cy="21" r="5" fill="#ef4444" /><circle cx="36" cy="21" r="5" fill="#f59e0b" /><circle cx="52" cy="21" r="5" fill="#10b981" />
+  <rect x="75" y="9" width="760" height="24" rx="4" fill="#f1f5f9" />
+  <text x="88" y="25" class="t-mono" fill="#475569">http://localhost:3000 — DataPulse Executive Reverse-ETL Mission Control</text>
+  <!-- Header: Title, Action Buttons & Airflow Link -->
+  <text x="24" y="72" class="t-title">DataPulse Executive Console</text>
+  <text x="235" y="72" class="t-sm">Reverse ETL Engine (:3000) &lt;-&gt; Apache Airflow (:8080)</text>
+  <rect x="475" y="54" width="125" height="28" class="btn" /><text x="537" y="72" text-anchor="middle" class="t-btn">1. Run Initial Sync</text>
+  <rect x="608" y="54" width="135" height="28" class="btn" /><text x="675" y="72" text-anchor="middle" class="t-btn">2. AI Diagnose &amp; Repair</text>
+  <rect x="751" y="54" width="135" height="28" class="btn" /><text x="818" y="72" text-anchor="middle" class="t-btn">3. Verify SHA-256 Cache</text>
+  <rect x="894" y="54" width="70" height="28" class="btn-danger" /><text x="929" y="72" text-anchor="middle" class="t-btn-dark" fill="#dc2626">Reset to 0</text>
+  <rect x="972" y="54" width="104" height="28" class="badge-airflow" /><circle cx="986" cy="68" r="4" fill="#10b981" /><text x="1032" y="72" text-anchor="middle" class="t-btn-dark" fill="#047857">Open Airflow (:8080)</text>
+  <!-- 5 Interactive KPI Cards -->
+  <g transform="translate(24, 96)">
+    <rect x="0" y="0" width="202" height="74" class="card-active" /><text x="14" y="22" class="t-sm" font-weight="600">ALL SYNCED CUSTOMERS</text><text x="14" y="50" class="t-kpi-val" fill="#0f172a">10,000</text><text x="14" y="66" class="t-kpi-sub">100 HTTP Batches (100% Synced)</text>
+    <rect x="212" y="0" width="202" height="74" class="card" /><text x="226" y="22" class="t-sm" font-weight="600">DETECTED ERRORS (DLQ)</text><text x="226" y="50" class="t-kpi-val" fill="#10b981">0</text><text x="226" y="66" class="t-kpi-sub">200 Quarantined Healed &amp; Replayed</text>
+    <rect x="424" y="0" width="202" height="74" class="card" /><text x="438" y="22" class="t-sm" font-weight="600">VIP RETENTION ALERTS</text><text x="438" y="50" class="t-kpi-val" fill="#e11d48">243</text><text x="438" y="66" class="t-kpi-sub">VIP Margin Drops &lt; -12% Alerted</text>
+    <rect x="636" y="0" width="202" height="74" class="card" /><text x="650" y="22" class="t-sm" font-weight="600">AUTO-REPAIRED (DLQ)</text><text x="650" y="50" class="t-kpi-val" fill="#0284c7">200</text><text x="650" y="66" class="t-kpi-sub">150 Emails + 50 NaNs Sanitized</text>
+    <rect x="848" y="0" width="204" height="74" class="card" /><text x="862" y="22" class="t-sm" font-weight="600">GUARDRAILS &amp; FINOPS</text><text x="862" y="50" class="t-kpi-val" fill="#d97706">$4,170/yr</text><text x="862" y="66" class="t-kpi-sub">901 Skipped | Airflow Ready</text>
   </g>
-
-  <!-- Table Container -->
-  <rect x="28" y="218" width="904" height="296" rx="8" fill="#0f172a" stroke="#1e293b" stroke-width="1.5" />
-  <rect x="29" y="219" width="902" height="36" rx="7" fill="#1e293b" />
-
-  <!-- Table Headers -->
-  <g font-family="Consolas, monospace" font-size="11" font-weight="bold" fill="#cbd5e1">
-    <text x="44" y="241">CUSTOMER ID</text>
-    <text x="148" y="241">EMAIL (ID PROPERTY)</text>
-    <text x="348" y="241">TIER</text>
-    <text x="470" y="241">NET PROFIT</text>
-    <text x="568" y="241">MARGIN</text>
-    <text x="646" y="241">AI EXECUTIVE BRIEF (15-22 WORDS)</text>
+  <!-- Controls Bar: Search, Errors Checkbox, Rows & Pagination -->
+  <g transform="translate(24, 182)">
+    <rect x="0" y="0" width="1052" height="42" class="card" />
+    <rect x="12" y="7" width="280" height="28" rx="5" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1" /><text x="24" y="25" class="t-sm">Search by ID e.g. 5432, 9805...</text>
+    <rect x="312" y="14" width="14" height="14" rx="3" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5" /><text x="334" y="25" class="t-sm" font-weight="500">Detected Errors Only</text>
+    <text x="520" y="25" class="t-sm">Sort: Customer ID (Asc)</text><text x="680" y="25" class="t-sm">Rows per page: 10</text>
+    <rect x="830" y="8" width="46" height="26" class="btn-outline" /><text x="853" y="25" text-anchor="middle" class="t-sm">First</text>
+    <rect x="882" y="8" width="46" height="26" class="btn-outline" /><text x="905" y="25" text-anchor="middle" class="t-sm">Prev</text>
+    <text x="958" y="25" text-anchor="middle" class="t-sm" font-weight="600">Page 1 of 1000</text>
+    <rect x="990" y="8" width="46" height="26" class="btn-outline" /><text x="1013" y="25" text-anchor="middle" class="t-sm">Next</text>
   </g>
-
-  <!-- Table Rows -->
-  <g font-family="Consolas, monospace" font-size="11">
+  <!-- Contacts Table Header -->
+  <g transform="translate(24, 236)">
+    <rect x="0" y="0" width="1052" height="34" fill="#f1f5f9" rx="6" />
+    <text x="16" y="22" class="t-sm" font-weight="700">CUSTOMER ID</text><text x="140" y="22" class="t-sm" font-weight="700">EMAIL</text><text x="360" y="22" class="t-sm" font-weight="700">TIER</text><text x="490" y="22" class="t-sm" font-weight="700">NET PROFIT</text><text x="590" y="22" class="t-sm" font-weight="700">MARGIN</text><text x="670" y="22" class="t-sm" font-weight="700">AI EXECUTIVE BRIEF / DLQ TRIAGE</text>
+  </g>
+  <!-- Contacts Table Rows -->
+  <g transform="translate(24, 276)">
     <!-- Row 1 -->
-    <line x1="28" y1="305" x2="932" y2="305" stroke="#1e293b" stroke-width="1" />
-    <text x="44" y="280" fill="#38bdf8" font-weight="bold">CUST-00001</text>
-    <text x="148" y="280" fill="#e2e8f0">contact_1@enterprise-00001.io</text>
-    <text x="348" y="280" fill="#f43f5e" font-weight="bold">ENTERPRISE_VIP</text>
-    <text x="470" y="280" fill="#f43f5e">-$25,000.00</text>
-    <text x="568" y="280" fill="#f43f5e" font-weight="bold">-20.8%</text>
-    <text x="646" y="274" fill="#94a3b8">Action required for Enterprise Corp 00001:</text>
-    <text x="646" y="290" fill="#94a3b8">VIP margin dropped to -20.8%; review pricing.</text>
-
+    <line x1="0" y1="46" x2="1052" y2="46" stroke="#f1f5f9" stroke-width="1" />
+    <text x="16" y="28" class="t-mono" font-weight="700" fill="#0284c7">CUST-00001</text><text x="140" y="28" class="t-mono">cfo@enterprise-00001.io</text>
+    <rect x="360" y="14" width="105" height="20" rx="4" fill="#ffe4e6" /><text x="412" y="28" text-anchor="middle" class="t-mono" font-weight="700" fill="#e11d48">ENTERPRISE_VIP</text>
+    <text x="490" y="28" class="t-mono" fill="#e11d48">-$25,000.00</text><text x="590" y="28" class="t-mono" font-weight="700" fill="#e11d48">-20.8%</text><text x="670" y="28" class="t-sm" fill="#475569">Action required: VIP margin dropped to -20.8%; pricing review needed.</text>
     <!-- Row 2 -->
-    <line x1="28" y1="358" x2="932" y2="358" stroke="#1e293b" stroke-width="1" />
-    <text x="44" y="334" fill="#38bdf8" font-weight="bold">CUST-00002</text>
-    <text x="148" y="334" fill="#e2e8f0">contact_2@enterprise-00002.io</text>
-    <text x="348" y="334" fill="#f43f5e" font-weight="bold">ENTERPRISE_VIP</text>
-    <text x="470" y="334" fill="#f43f5e">-$25,000.00</text>
-    <text x="568" y="334" fill="#f43f5e" font-weight="bold">-20.8%</text>
-    <text x="646" y="328" fill="#94a3b8">Action required for Enterprise Corp 00002:</text>
-    <text x="646" y="344" fill="#94a3b8">VIP margin dropped to -20.8%; review pricing.</text>
-
-    <!-- Row 3 (Healed Email Row) -->
-    <line x1="28" y1="411" x2="932" y2="411" stroke="#1e293b" stroke-width="1" />
-    <text x="44" y="387" fill="#10b981" font-weight="bold">CUST-09801</text>
-    <text x="148" y="387" fill="#e2e8f0">corrupt_email_9801@invalid.domain</text>
-    <text x="348" y="387" fill="#38bdf8">MID_MARKET</text>
-    <text x="470" y="387" fill="#10b981">+$54,005.00</text>
-    <text x="568" y="387" fill="#10b981" font-weight="bold">+50.0%</text>
-    <text x="646" y="387" fill="#10b981">[DLQ REPLAYED] RFC-5322 Email Normalized</text>
-
-    <!-- Row 4 (Healed NaN Row) -->
-    <line x1="28" y1="464" x2="932" y2="464" stroke="#1e293b" stroke-width="1" />
-    <text x="44" y="440" fill="#10b981" font-weight="bold">CUST-09951</text>
-    <text x="148" y="440" fill="#e2e8f0">contact_9951@enterprise-09951.io</text>
-    <text x="348" y="440" fill="#a855f7">SMB</text>
-    <text x="470" y="440" fill="#10b981">+$54,755.00</text>
-    <text x="568" y="440" fill="#10b981" font-weight="bold">+50.0%</text>
-    <text x="646" y="440" fill="#10b981">[DLQ REPLAYED] IEEE-754 NaN Margin Recomputed</text>
-
-    <!-- Footer Note -->
-    <text x="44" y="494" fill="#64748b">
-      Showing 4 of 50 SSR preview rows (10,000 total contacts stored in Map&lt;string, ContactRecord&gt; | 0 Pending DLQ)
-    </text>
+    <line x1="0" y1="94" x2="1052" y2="94" stroke="#f1f5f9" stroke-width="1" />
+    <text x="16" y="76" class="t-mono" font-weight="700" fill="#0284c7">CUST-05432</text><text x="140" y="76" class="t-mono">contact_5432@saas-growth.com</text>
+    <rect x="360" y="62" width="85" height="20" rx="4" fill="#e0f2fe" /><text x="402" y="76" text-anchor="middle" class="t-mono" font-weight="600" fill="#0284c7">MID_MARKET</text>
+    <text x="490" y="76" class="t-mono" fill="#10b981">+$18,240.00</text><text x="590" y="76" class="t-mono" font-weight="600" fill="#10b981">+42.5%</text><text x="670" y="76" class="t-sm" fill="#64748b">Healthy profitability tier; stable recurring subscription revenue.</text>
+    <!-- Row 3 (Auto-Repaired Email) -->
+    <line x1="0" y1="142" x2="1052" y2="142" stroke="#f1f5f9" stroke-width="1" />
+    <text x="16" y="124" class="t-mono" font-weight="700" fill="#10b981">CUST-09801</text><text x="140" y="124" class="t-mono">repaired_9801@sanitized.domain</text>
+    <rect x="360" y="110" width="55" height="20" rx="4" fill="#f1f5f9" /><text x="387" y="124" text-anchor="middle" class="t-mono" fill="#475569">SME</text>
+    <text x="490" y="124" class="t-mono" fill="#10b981">+$4,500.00</text><text x="590" y="124" class="t-mono" font-weight="600" fill="#10b981">+31.0%</text><text x="670" y="124" class="t-sm" fill="#047857">[AUTO-REPAIRED] RFC-5322 Email Sanitized &amp; Replayed from DLQ</text>
+    <!-- Row 4 (Auto-Repaired NaN) -->
+    <line x1="0" y1="190" x2="1052" y2="190" stroke="#f1f5f9" stroke-width="1" />
+    <text x="16" y="172" class="t-mono" font-weight="700" fill="#10b981">CUST-09951</text><text x="140" y="172" class="t-mono">contact_9951@enterprise-09951.io</text>
+    <rect x="360" y="158" width="105" height="20" rx="4" fill="#f1f5f9" /><text x="412" y="172" text-anchor="middle" class="t-mono" fill="#475569">ENTERPRISE</text>
+    <text x="490" y="172" class="t-mono" fill="#10b981">+$54,755.00</text><text x="590" y="172" class="t-mono" font-weight="600" fill="#10b981">+50.0%</text><text x="670" y="172" class="t-sm" fill="#047857">[AUTO-REPAIRED] IEEE-754 NaN Margin Recomputed &amp; Synced</text>
   </g>
+  <!-- Footer Status Bar -->
+  <rect y="646" width="1100" height="34" fill="#ffffff" stroke="#e2e8f0" stroke-width="1" />
+  <text x="24" y="668" class="t-mono" fill="#64748b">Status: 200 OK | Conservation Invariant N (10,000) = S (10,000) + O (0) + E (0) Balanced: True | Airflow Standalone: Online</text>
+  <text x="1076" y="668" text-anchor="end" class="t-mono" fill="#10b981">HMAC-SHA256 &amp; Zod Active</text>
 </svg>
-

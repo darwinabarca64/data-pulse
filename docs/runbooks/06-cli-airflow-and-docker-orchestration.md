@@ -115,51 +115,61 @@ Expected Output from Step 5 (`dlq replay`):
 
 ---
 
-## 4. Docker Compose 4-Container Stack Lifecycle & Memory Governance
+## 4. Docker Compose 3-Service Unified Stack & Memory Governance
 
 ### 4.1 Container Resource Allocation Table (`docker-compose.yml`)
 
-| Container Name | Service Key | Image / Dockerfile | Hard `mem_limit` | Host Port Mapping | Volume Mounts |
+| Container Name | Service Key | Image / Dockerfile | Hard `mem_limit` | Host Port Mapping | Architectural Role & Configuration |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `datapulse-postgres` | `postgres` | `postgres:15-alpine` | `512m` | Internal `:5432` | Ephemeral metadata DB (`airflow`) |
-| `datapulse-connector-ts` | `connector-ts` | `infra/docker/Dockerfile.connector` | `512m` | `3000:3000` | None (stateless non-root `node`) |
-| `datapulse-airflow-webserver` | `airflow-webserver` | `apache/airflow:2.9.3-python3.12` | `1536m` | `8080:8080` | `./orchestration/dags`, `./core-engine`, `./syncs`, `./data` |
-| `datapulse-airflow-scheduler` | `airflow-scheduler` | `apache/airflow:2.9.3-python3.12` | `1536m` | Internal | `./orchestration/dags`, `./core-engine`, `./syncs`, `./data` |
-| **Total Stack Footprint** | **4 Services** | **Bridge: `datapulse-net`** | **`4,096 MB` (`4.0 GB`)** | **`:3000`, `:8080`** | **Fits inside `6.0 GB` WSL2 `.wslconfig` cap** |
+| `datapulse-connectors-ts` | `connectors-ts` | `infra/docker/Dockerfile.connector` (Node 22 + Python 3.11) | `512M` | `3000:3000` | Unified interactive Executive Console, CRM mock endpoint, HMAC security, DuckDB CLI runner, and Airflow REST trigger client. |
+| `datapulse-core-engine` | `core-engine` | `infra/docker/Dockerfile.engine` | `1024M` (`1G`) | None (batch job) | One-off CLI execution container (`datapulse init && datapulse run`). |
+| `datapulse-airflow-orchestrator` | `airflow-orchestrator` | `apache/airflow:2.10.2-python3.12` | `3072M` (`3G`) | `8080:8080` | Complete Apache Airflow 2.10 standalone orchestrator with basic auth (`admin` / `datapulse2026`) and REST API enablement. |
+| **Total Stack Footprint** | **3 Services** | **Bridge: `datapulse-net`** | **`4,608 MB` (`4.5 GB`)** | **`:3000`, `:8080`** | **Strictly governed inside the `6.0 GB` WSL2 `.wslconfig` cap** |
 
 ### 4.2 Starting, Inspecting, Triggering & Tearing Down the Docker Stack
 
 ```bash
-# 1. Build images and start all 4 containers in detached mode
+# 1. Build images and start all services in detached mode
 docker compose up --build -d
 
-# 2. Verify container health status and memory limits
+# 2. Verify container health status and memory allocations
 docker compose ps
 docker stats --no-stream
 
-# 3. Trigger the Airflow DAG manually inside the scheduler container
-docker exec datapulse-airflow-scheduler airflow dags trigger datapulse_hubspot_profitability_sync
+# 3. Access the web consoles in your browser
+# Executive CRM Console: http://localhost:3000
+# Apache Airflow Console: http://localhost:8080 (User: admin | Password: datapulse2026)
 
-# 4. Follow live execution logs from the scheduler and TypeScript CRM connector
-docker compose logs -f airflow-scheduler connector-ts
+# 4. Follow live logs from the interactive connector and Airflow orchestrator
+docker compose logs -f connectors-ts airflow-orchestrator
 
-# 5. Tear down all containers, networks, and ephemeral volumes cleanly
+# 5. Tear down containers, networks, and persistent volumes cleanly
 docker compose down -v
 ```
 
-### 4.3 Inspecting Container Environment & Executing Ad-Hoc CLI Commands Inside Docker
+### 4.3 Bidirectional REST Bridge Between Executive Console (:3000) & Airflow (:8080)
 
-You can also invoke any `datapulse` CLI subcommand directly inside the running `datapulse-airflow-scheduler` container:
+When clicking pipeline action buttons on `http://localhost:3000`:
+1. `server.ts` spawns `datapulse.interfaces.cli` inside the multi-runtime Node+Python container to process local DuckDB data.
+2. Simultaneously, `server.ts` invokes the Apache Airflow REST API (`POST http://airflow-orchestrator:8080/api/v1/dags/datapulse_hubspot_sync_dag/dagRuns`) authenticated with Basic Auth (`admin`:`datapulse2026`), passing payload:
+   ```json
+   { "conf": { "triggered_by": "datapulse-mission-control-ui" } }
+   ```
+3. The response status is returned to the browser and updates the live `airflowOnline` and `airflowDagStatus` badges on the console.
+
+### 4.4 Inspecting Container Environment & Executing Ad-Hoc CLI Commands Inside Docker
+
+You can invoke any `datapulse` CLI subcommand directly inside either running container:
 
 ```bash
-# Validate sync manifest inside the running Airflow scheduler container
-docker exec datapulse-airflow-scheduler python -m datapulse.interfaces.cli validate --manifest /opt/airflow/syncs/hubspot_profitability.yml
+# Run CLI validation inside the multi-runtime connector container
+docker exec datapulse-connectors-ts python -m datapulse.interfaces.cli validate --manifest /app/syncs/hubspot_profitability.yml --db-path /app/data/local_warehouse.duckdb
 
-# Run surgical DLQ replay from inside the container against connector-ts:3000
-docker exec datapulse-airflow-scheduler python -m datapulse.interfaces.cli dlq replay --manifest /opt/airflow/syncs/hubspot_profitability.yml
+# Trigger manual DAG execution inside the Airflow container
+docker exec datapulse-airflow-orchestrator airflow dags trigger datapulse_hubspot_sync_dag
 ```
 
-### 4.4 Verifying the Thin DAG Parse SLA (`< 0.5 Seconds`) Locally
+### 4.5 Verifying the Thin DAG Parse SLA (`< 0.5 Seconds`) Locally
 
 ```bash
 python -m pytest orchestration/tests/test_step6_cli_and_airflow_dag.py -v

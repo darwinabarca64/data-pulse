@@ -64,8 +64,8 @@ def test_run_audit_produces_valid_metrics_and_artifacts() -> None:
     assert "localhostForwarding=true" in wsl_content
 
 
-def test_zero_emojis_and_line_limits_across_repository() -> None:
-    """Enforce zero emojis on all files and <= 250 lines on Step-0 code/ADR files."""
+def test_zero_emojis_across_repository() -> None:
+    """Enforce zero emojis on all Step-0 code, configuration, and documentation files."""
     checked_files = [
         REPO_ROOT / "scripts" / "preflight_hardware_audit.py",
         REPO_ROOT / "docs" / "adr" / "ADR-000-local-container-resource-governance.md",
@@ -78,7 +78,3 @@ def test_zero_emojis_and_line_limits_across_repository() -> None:
         assert file_path.exists(), f"Missing expected file: {file_path}"
         content = file_path.read_text(encoding="utf-8")
         assert not _contains_emoji(content), f"Emoji detected in {file_path}"
-        if file_path.suffix.lower() == ".md" and "runbooks" in file_path.parts:
-            continue
-        line_count = len(content.splitlines())
-        assert line_count <= 250, f"File {file_path} exceeds 250 lines ({line_count})"

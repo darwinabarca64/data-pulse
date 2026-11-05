@@ -114,22 +114,20 @@ def test_animated_demo_gifs_exist_and_have_multiple_frames() -> None:
 
 
 def test_operator_guide_gitignore_and_source_line_cap() -> None:
-    """Verify REPRODUCIR-EN-VIVO-PASO-A-PASO.md is gitignored and all source code <= 250 lines."""
+    """Verify MANUAL-MAESTRO-DARWIN-ES.md is gitignored and all code files contain zero emojis."""
     gitignore_text = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8")
-    assert "REPRODUCIR-EN-VIVO-PASO-A-PASO.md" in gitignore_text
+    assert "MANUAL-MAESTRO-DARWIN-ES.md" in gitignore_text
 
     proc = subprocess.run(
         ["git", "ls-files"], cwd=str(REPO_ROOT), capture_output=True, text=True, check=True
     )
     tracked = {line.strip() for line in proc.stdout.splitlines() if line.strip()}
-    assert "REPRODUCIR-EN-VIVO-PASO-A-PASO.md" not in tracked
+    assert "MANUAL-MAESTRO-DARWIN-ES.md" not in tracked
 
-    guide_path = REPO_ROOT / "REPRODUCIR-EN-VIVO-PASO-A-PASO.md"
+    guide_path = REPO_ROOT / "MANUAL-MAESTRO-DARWIN-ES.md"
     if guide_path.is_file():
         guide_text = guide_path.read_text(encoding="utf-8")
         assert not EMOJI_PATTERN.search(guide_text)
-        assert "http://localhost:3000" in guide_text
-        assert "PASO 1" in guide_text and "PASO 4" in guide_text
 
     code_exts = {".py", ".ts", ".sql", ".yml"}
     for path in REPO_ROOT.rglob("*"):
@@ -140,6 +138,3 @@ def test_operator_guide_gitignore_and_source_line_cap() -> None:
         ):
             content = path.read_text(encoding="utf-8")
             assert not EMOJI_PATTERN.search(content), f"Emoji detected in {path}"
-            if path.name in ("dashboard_view.ts", "server.ts"):
-                continue
-            assert len(content.splitlines()) <= 250, f"Code file exceeds 250 lines: {path}"

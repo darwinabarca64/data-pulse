@@ -88,7 +88,7 @@ Every ADR follows Michael Nygard's format (`Status`, `Context`, `Decision`, `Con
 
 ---
 
-## 4. Enterprise Operational Runbooks (`docs/runbooks/00` through `08`)
+## 4. Enterprise Operational Runbooks (`docs/runbooks/00` through `09`)
 
 Every runbook contains an ASCII architecture diagram, copy-pasteable CLI/SQL commands, expected console/tabular outputs, and a 5-row **Operational Troubleshooting Table**:
 
@@ -103,6 +103,13 @@ Every runbook contains an ASCII architecture diagram, copy-pasteable CLI/SQL com
 | **Runbook 06** | [06-cli-airflow-and-docker-orchestration.md](runbooks/06-cli-airflow-and-docker-orchestration.md) | `.venv` bootstrap, complete 5-command CLI matrix, Thin Airflow DAG verification, and `docker compose up --build -d` lifecycle management. |
 | **Runbook 07** | [07-live-production-incident-drill-and-production-cutover.md](runbooks/07-live-production-incident-drill-and-production-cutover.md) | **Mode 1** (`live_incident_drill.py`), **Mode 2** (2-Terminal + Browser `http://localhost:3000` Steps A–E walkthrough), and **Mode 3** (`--no-seed` Production Cutover). |
 | **Runbook 08** | [08-cicd-quality-gates-and-dockerhub-publishing.md](runbooks/08-cicd-quality-gates-and-dockerhub-publishing.md) | Local 4-Gate pre-push verification commands, standalone `docker run` bridge network + volume tutorial, and `:sha-<commit>` container rollback. |
+| **Runbook 09** | [09-custom-database-and-schema-integration.md](runbooks/09-custom-database-and-schema-integration.md) | Integrating arbitrary schemas (5,555 records, E-commerce/SaaS models), YAML mapping, and Cloud/Airflow cutover. |
+
+---
+
+## 5. Architectural Reference Specifications
+
+- [V1-ARCHITECTURE-REFERENCE.md](architecture/V1-ARCHITECTURE-REFERENCE.md): Technical audit, telemetry specifications, FinOps math invariants, and Staff-Grade user experience foundation.
 
 ---
 

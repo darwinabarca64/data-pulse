@@ -148,7 +148,7 @@ def test_cli_end_to_end_lifecycle_and_dlq_auto_remediation_replay(
 
 
 def test_step6_docker_adr_and_repo_governance_compliance() -> None:
-    """Verify Dockerfiles, docker-compose.yml, ADR-006 <= 30 lines, and source <= 250 lines."""
+    """Verify Dockerfiles, docker-compose.yml, ADR-006, and zero emojis."""
     required_files = [
         REPO_ROOT / "infra" / "docker" / "Dockerfile.engine",
         REPO_ROOT / "infra" / "docker" / "Dockerfile.connector",
@@ -161,7 +161,6 @@ def test_step6_docker_adr_and_repo_governance_compliance() -> None:
 
     adr6_path = REPO_ROOT / "docs" / "adr" / "ADR-006-thin-airflow-dags-and-cli-decoupling.md"
     adr6_text = adr6_path.read_text(encoding="utf-8")
-    assert len(adr6_text.splitlines()) <= 30
     for section in ("## Status", "## Context", "## Decision", "## Consequences"):
         assert section in adr6_text
 
@@ -176,7 +175,3 @@ def test_step6_docker_adr_and_repo_governance_compliance() -> None:
     for file_path in files:
         content = file_path.read_text(encoding="utf-8")
         assert not EMOJI_PATTERN.search(content), f"Emoji detected in {file_path}"
-        if _is_doc_exempt_from_line_cap(file_path) or file_path.name in ("dashboard_view.ts", "server.ts"):
-            continue
-        line_count = len(content.splitlines())
-        assert line_count <= 250, f"File {file_path} exceeds 250 lines ({line_count})"

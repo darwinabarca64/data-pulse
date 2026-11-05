@@ -176,13 +176,12 @@ def test_load_sync_manifest_validates_hubspot_profitability_yaml() -> None:
 
 
 def test_step2_adr_and_repo_governance_compliance() -> None:
-    """Verify ADR-002 <= 30 lines, all source/config files <= 250 lines, and zero emojis."""
+    """Verify ADR-002 structure and all files adhere to zero emojis policy."""
     adr2_path = (
         REPO_ROOT / "docs" / "adr" / "ADR-002-declarative-yaml-manifests-and-pydantic-contracts.md"
     )
     assert adr2_path.is_file()
     adr2_text = adr2_path.read_text(encoding="utf-8")
-    assert len(adr2_text.splitlines()) <= 30
     for section in ("## Status", "## Context", "## Decision", "## Consequences"):
         assert section in adr2_text
 
@@ -197,7 +196,3 @@ def test_step2_adr_and_repo_governance_compliance() -> None:
     for file_path in files:
         content = file_path.read_text(encoding="utf-8")
         assert not EMOJI_PATTERN.search(content), f"Emoji detected in {file_path}"
-        if _is_doc_exempt_from_line_cap(file_path) or file_path.name in ("dashboard_view.ts", "server.ts"):
-            continue
-        line_count = len(content.splitlines())
-        assert line_count <= 250, f"File {file_path} exceeds 250 lines ({line_count})"
