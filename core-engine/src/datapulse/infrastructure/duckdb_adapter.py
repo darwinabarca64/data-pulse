@@ -59,7 +59,16 @@ class DuckDBWarehouseAdapter(WarehouseAdapterPort):
         """Open DuckDB database file and create parent directories if needed."""
         if str(self._db_path) != ":memory:":
             self._db_path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                self._db_path.parent.chmod(0o777)
+            except OSError:
+                pass
         self._conn = duckdb.connect(str(self._db_path))
+        if str(self._db_path) != ":memory:" and self._db_path.exists():
+            try:
+                self._db_path.chmod(0o666)
+            except OSError:
+                pass
 
     def close(self) -> None:
         """Close active DuckDB connection."""

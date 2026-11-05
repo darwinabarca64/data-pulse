@@ -68,7 +68,7 @@ except ImportError:
 
 MANIFEST_PATH = "syncs/hubspot_profitability.yml"
 SYNC_ID = "hubspot_customer_profitability"
-CLI_INVOCATION = "python -m datapulse.interfaces.cli"
+CLI_INVOCATION = "cd /opt/airflow 2>/dev/null || true; python -m datapulse.interfaces.cli"
 
 DEFAULT_ARGS: dict[str, Any] = {
     "owner": "datapulse-platform-engineering",
