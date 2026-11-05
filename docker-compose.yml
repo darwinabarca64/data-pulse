@@ -98,6 +98,7 @@ services:
       - bash
       - -c
       - |
+        rm -f /opt/airflow/airflow-webserver.pid /opt/airflow/airflow-webserver-monitor.pid
         airflow db migrate && (airflow users create --username admin --password datapulse2026 --firstname Darwin --lastname Abarca --role Admin --email admin@datapulse.local || airflow users reset-password --username admin --password datapulse2026)
         exec airflow standalone
     deploy:
